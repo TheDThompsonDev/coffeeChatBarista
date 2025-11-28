@@ -1,0 +1,21 @@
+{
+  "name": "coffee-chat-barista",
+  "version": "1.0.0",
+  "description": "Discord bot for facilitating weekly random 1-on-1 coffee chats",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "keywords": ["discord", "bot", "coffee-chat", "community"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
+    "discord.js": "^14.14.1",
+    "dotenv": "^16.3.1",
+    "node-cron": "^3.0.3"
+  }
+}
+
