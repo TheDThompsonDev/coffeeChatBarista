@@ -56,14 +56,14 @@ export const MATCHING_CONFIG = {
 };
 
 export const CRON_SCHEDULES = {
-  signupAnnouncement: '0 8 * * 1',
-  matching: '0 12 * * 1',
+  signupAnnouncement: '30 14 * * 5',
+  matching: '30 18 * * 5',
   weeklyReset: '59 23 * * 0'
 };
 
 export const SIGNUP_WINDOW = {
-  dayOfWeek: 1,
-  startHour: 8,
-  endHour: 12
+  dayOfWeek: 5,
+  startHour: 14,
+  endHour: 19
 };
 
