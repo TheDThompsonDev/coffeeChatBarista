@@ -25,7 +25,10 @@ export async function postSignupAnnouncement(discordClient) {
     .setFooter({ text: 'Let\'s build connections, one coffee chat at a time! ☕' })
     .setTimestamp();
   
-  await announcementsChannel.send({ embeds: [signupAnnouncementEmbed] });
+  await announcementsChannel.send({
+    content: `<@&${discord.roles.coffeeChatters}>`,
+    embeds: [signupAnnouncementEmbed]
+  });
   console.log('Posted signup announcement');
 }
 

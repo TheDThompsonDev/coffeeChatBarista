@@ -9,6 +9,7 @@ const requiredEnvironmentVariables = [
   'CHANNEL_ANNOUNCEMENTS',
   'CHANNEL_PAIRINGS',
   'ROLE_MODERATOR',
+  'ROLE_COFFEE_CHATTERS',
   'SUPABASE_URL',
   'SUPABASE_SERVICE_KEY'
 ];
@@ -28,7 +29,8 @@ export const discord = {
     pairings: process.env.CHANNEL_PAIRINGS
   },
   roles: {
-    moderator: process.env.ROLE_MODERATOR
+    moderator: process.env.ROLE_MODERATOR,
+    coffeeChatters: process.env.ROLE_COFFEE_CHATTERS
   }
 };
 
