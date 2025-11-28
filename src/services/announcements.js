@@ -1,11 +1,19 @@
 import { EmbedBuilder } from 'discord.js';
-import { discord } from '../config.js';
+import { discord, SIGNUP_WINDOW } from '../config.js';
 
 const COFFEE_BROWN_COLOR = '#6F4E37';
 const ERROR_RED_COLOR = '#FF6B6B';
 
+function formatHourForDisplay(hour24) {
+  const hour12 = hour24 > 12 ? hour24 - 12 : hour24;
+  const amPm = hour24 >= 12 ? 'PM' : 'AM';
+  return `${hour12}:00 ${amPm}`;
+}
+
 export async function postSignupAnnouncement(discordClient) {
   const announcementsChannel = await discordClient.channels.fetch(discord.channels.announcements);
+  
+  const signupCloseTime = formatHourForDisplay(SIGNUP_WINDOW.endHour);
   
   const signupAnnouncementEmbed = new EmbedBuilder()
     .setColor(COFFEE_BROWN_COLOR)
@@ -15,7 +23,7 @@ export async function postSignupAnnouncement(discordClient) {
       '**How it works:**\n' +
       '• Use `/coffee join <timezone>` to sign up\n' +
       '• Choose your timezone: AMERICAS, EMEA, or APAC\n' +
-      '• Signups close today at **12:00 PM CT**\n' +
+      `• Signups close today at **${signupCloseTime} CT**\n` +
       '• Matches will be posted in <#' + discord.channels.pairings + '>\n\n' +
       '**Remember:**\n' +
       '• If you sign up, please show up!\n' +

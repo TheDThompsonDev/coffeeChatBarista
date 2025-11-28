@@ -6,6 +6,8 @@ import {
   createManualPairing,
   getProfile
 } from '../services/database.js';
+import { postSignupAnnouncement } from '../services/announcements.js';
+import { discord } from '../config.js';
 
 export const data = new SlashCommandBuilder()
   .setName('coffee')
@@ -14,6 +16,22 @@ export const data = new SlashCommandBuilder()
     group
       .setName('admin')
       .setDescription('Admin commands for moderators')
+      .addSubcommand(subcommand =>
+        subcommand
+          .setName('announce')
+          .setDescription('Manually send the signup announcement')
+      )
+      .addSubcommand(subcommand =>
+        subcommand
+          .setName('say')
+          .setDescription('Have the bot post a custom message in announcements')
+          .addStringOption(option =>
+            option
+              .setName('message')
+              .setDescription('The message to post')
+              .setRequired(true)
+          )
+      )
       .addSubcommand(subcommand =>
         subcommand
           .setName('reset')
@@ -74,7 +92,11 @@ export async function execute(commandInteraction) {
   const selectedSubcommand = commandInteraction.options.getSubcommand();
   
   try {
-    if (selectedSubcommand === 'reset') {
+    if (selectedSubcommand === 'announce') {
+      await handleAnnounce(commandInteraction);
+    } else if (selectedSubcommand === 'say') {
+      await handleSay(commandInteraction);
+    } else if (selectedSubcommand === 'reset') {
       await handleResetSignups(commandInteraction);
     } else if (selectedSubcommand === 'unpunish') {
       await handleUnpunishUser(commandInteraction);
@@ -87,6 +109,31 @@ export async function execute(commandInteraction) {
       content: '❌ An error occurred while executing the admin command.'
     });
   }
+}
+
+async function handleAnnounce(commandInteraction) {
+  await commandInteraction.reply({
+    content: `📢 Sending signup announcement...`,
+    ephemeral: true
+  });
+  
+  await postSignupAnnouncement(commandInteraction.client);
+  
+  console.log(`Admin ${commandInteraction.user.id} manually triggered signup announcement`);
+}
+
+async function handleSay(commandInteraction) {
+  const customMessage = commandInteraction.options.getString('message');
+  const announcementsChannel = await commandInteraction.client.channels.fetch(discord.channels.announcements);
+  
+  await announcementsChannel.send(customMessage);
+  
+  await commandInteraction.reply({
+    content: `✅ Message posted to <#${discord.channels.announcements}>`,
+    ephemeral: true
+  });
+  
+  console.log(`Admin ${commandInteraction.user.id} posted custom message: ${customMessage}`);
 }
 
 async function handleResetSignups(commandInteraction) {
