@@ -78,15 +78,13 @@ export async function execute(commandInteraction) {
     statusEmbed.setDescription(statusDescription);
     
     await commandInteraction.reply({
-      embeds: [statusEmbed],
-      ephemeral: true
+      embeds: [statusEmbed]
     });
     
   } catch (statusCommandError) {
     console.error('Error in /coffee status:', statusCommandError);
     await commandInteraction.reply({
-      content: '❌ An error occurred while fetching your status. Please try again later.',
-      ephemeral: true
+      content: '❌ An error occurred while fetching your status. Please try again later.'
     });
   }
 }

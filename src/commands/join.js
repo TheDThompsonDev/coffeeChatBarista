@@ -36,8 +36,7 @@ export async function execute(commandInteraction) {
   try {
     if (!isSignupWindowOpen()) {
       return await commandInteraction.reply({
-        content: '❌ Signups are currently closed. They open every Monday from 8:00 AM to 12:00 PM CT.',
-        ephemeral: true
+        content: '❌ Signups are currently closed. They open every Monday from 8:00 AM to 12:00 PM CT.'
       });
     }
     
@@ -47,17 +46,14 @@ export async function execute(commandInteraction) {
       const penaltyExpiryDate = new Date(userProfile.penalty_expires_at);
       
       return await commandInteraction.reply({
-        content: `❌ You are currently penalized for a no-show and cannot sign up.\n\n` +
-                 `Your penalty expires on **${formatDate(penaltyExpiryDate)}**.`,
-        ephemeral: true
+        content: `❌ <@${userId}> is currently penalized for a no-show and cannot sign up.\n\nPenalty expires on **${formatDate(penaltyExpiryDate)}**.`
       });
     }
     
     const userAlreadySignedUp = await isSignedUp(userId);
     if (userAlreadySignedUp) {
       return await commandInteraction.reply({
-        content: '❌ You\'re already signed up for this week\'s coffee chat!',
-        ephemeral: true
+        content: `❌ <@${userId}> is already signed up for this week's coffee chat!`
       });
     }
     
@@ -65,17 +61,13 @@ export async function execute(commandInteraction) {
     await addSignup(userId);
     
     await commandInteraction.reply({
-      content: `✅ You're signed up for this week's coffee chat! (${selectedTimezoneRegion} timezone)\n\n` +
-               `Signups close today at 12:00 PM CT. Matches will be posted in the pairings channel.\n\n` +
-               `Need to cancel? Use \`/coffee leave\` before signups close.`,
-      ephemeral: true
+      content: `☕ <@${userId}> signed up for this week's coffee chat! (${selectedTimezoneRegion} timezone)`
     });
     
   } catch (joinCommandError) {
     console.error('Error in /coffee join:', joinCommandError);
     await commandInteraction.reply({
-      content: '❌ An error occurred while signing you up. Please try again later.',
-      ephemeral: true
+      content: '❌ An error occurred while signing you up. Please try again later.'
     });
   }
 }

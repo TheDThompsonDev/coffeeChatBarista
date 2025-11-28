@@ -25,8 +25,7 @@ export async function execute(commandInteraction) {
   try {
     if (reportingUserId === reportedUserId) {
       return await commandInteraction.reply({
-        content: '❌ You cannot report yourself.',
-        ephemeral: true
+        content: '❌ You cannot report yourself.'
       });
     }
     
@@ -34,8 +33,7 @@ export async function execute(commandInteraction) {
     
     if (!reporterCurrentPairing) {
       return await commandInteraction.reply({
-        content: '❌ You don\'t have a match this week, so you cannot report anyone.',
-        ephemeral: true
+        content: `❌ <@${reportingUserId}> doesn't have a match this week, so cannot report anyone.`
       });
     }
     
@@ -44,19 +42,14 @@ export async function execute(commandInteraction) {
     
     if (!allUsersInReporterPairing.includes(reportedUserId)) {
       return await commandInteraction.reply({
-        content: `❌ ${reportedDiscordUser.username} is not your match this week. You can only report your assigned partner.`,
-        ephemeral: true
+        content: `❌ <@${reportedUserId}> is not <@${reportingUserId}>'s match this week. You can only report your assigned partner.`
       });
     }
     
     const penaltyExpiryDate = await applyPenalty(reportedUserId);
     
     await commandInteraction.reply({
-      content: `✅ **Report submitted**\n\n` +
-               `${reportedDiscordUser.username} has been penalized for a no-show.\n` +
-               `They will be unable to sign up until **${formatDate(penaltyExpiryDate)}** (2 weeks).\n\n` +
-               `We're sorry this happened. We'll see you at next week's coffee chat!`,
-      ephemeral: true
+      content: `⚠️ **No-Show Report**\n\n<@${reportedUserId}> has been reported by <@${reportingUserId}> for not showing up.\n\nThey are now penalized and cannot sign up until **${formatDate(penaltyExpiryDate)}**.`
     });
     
     console.log(`User ${reportingUserId} reported ${reportedUserId} for no-show. Penalty applied until ${penaltyExpiryDate.toISOString()}`);
@@ -64,8 +57,7 @@ export async function execute(commandInteraction) {
   } catch (reportCommandError) {
     console.error('Error in /coffee report:', reportCommandError);
     await commandInteraction.reply({
-      content: '❌ An error occurred while submitting your report. Please try again later.',
-      ephemeral: true
+      content: '❌ An error occurred while submitting your report. Please try again later.'
     });
   }
 }

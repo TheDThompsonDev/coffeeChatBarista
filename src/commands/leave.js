@@ -17,33 +17,27 @@ export async function execute(commandInteraction) {
   try {
     if (!isSignupWindowOpen()) {
       return await commandInteraction.reply({
-        content: '❌ You can only withdraw during the signup window (Monday 8:00 AM - 12:00 PM CT).\n\n' +
-                 'Matches have already been created. If you need to cancel after matching, please coordinate directly with your partner.',
-        ephemeral: true
+        content: '❌ Withdrawals are only allowed during the signup window (Monday 8:00 AM - 12:00 PM CT).\n\nMatches have already been created. Please coordinate directly with your partner.'
       });
     }
     
     const userIsCurrentlySignedUp = await isSignedUp(userId);
     if (!userIsCurrentlySignedUp) {
       return await commandInteraction.reply({
-        content: '❌ You\'re not signed up for this week\'s coffee chat.',
-        ephemeral: true
+        content: `❌ <@${userId}> is not signed up for this week's coffee chat.`
       });
     }
     
     await removeSignup(userId);
     
     await commandInteraction.reply({
-      content: '✅ You\'ve been removed from this week\'s coffee chat signups.\n\n' +
-               'You can sign up again with `/coffee join` before 12:00 PM CT today.',
-      ephemeral: true
+      content: `👋 <@${userId}> has withdrawn from this week's coffee chat signups.`
     });
     
   } catch (leaveCommandError) {
     console.error('Error in /coffee leave:', leaveCommandError);
     await commandInteraction.reply({
-      content: '❌ An error occurred while removing your signup. Please try again later.',
-      ephemeral: true
+      content: '❌ An error occurred while removing your signup. Please try again later.'
     });
   }
 }

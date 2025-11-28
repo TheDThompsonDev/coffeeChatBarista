@@ -71,8 +71,7 @@ discordClient.on('interactionCreate', async (receivedInteraction) => {
     console.error('Error executing command:', commandExecutionError);
     
     const genericErrorMessage = {
-      content: '❌ An error occurred while executing this command.',
-      ephemeral: true
+      content: '❌ An error occurred while executing this command.'
     };
     
     if (receivedInteraction.replied || receivedInteraction.deferred) {

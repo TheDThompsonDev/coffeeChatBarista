@@ -67,8 +67,7 @@ export async function execute(commandInteraction) {
   const commandingGuildMember = await commandInteraction.guild.members.fetch(commandInteraction.user.id);
   if (!isModerator(commandingGuildMember)) {
     return await commandInteraction.reply({
-      content: '❌ You do not have permission to use admin commands.',
-      ephemeral: true
+      content: '❌ You do not have permission to use admin commands.'
     });
   }
   
@@ -85,8 +84,7 @@ export async function execute(commandInteraction) {
   } catch (adminCommandError) {
     console.error(`Error in /coffee admin ${selectedSubcommand}:`, adminCommandError);
     await commandInteraction.reply({
-      content: '❌ An error occurred while executing the admin command.',
-      ephemeral: true
+      content: '❌ An error occurred while executing the admin command.'
     });
   }
 }
@@ -95,8 +93,7 @@ async function handleResetSignups(commandInteraction) {
   await clearAllSignups();
   
   await commandInteraction.reply({
-    content: '✅ **All signups cleared**\n\nThe current week\'s signups have been reset.',
-    ephemeral: true
+    content: `🔄 **All signups cleared** by <@${commandInteraction.user.id}>\n\nThe current week's signups have been reset.`
   });
   
   console.log(`Admin ${commandInteraction.user.id} cleared all signups`);
@@ -108,16 +105,14 @@ async function handleUnpunishUser(commandInteraction) {
   const selectedUserProfile = await getProfile(selectedUser.id);
   if (!selectedUserProfile || !selectedUserProfile.penalty_expires_at) {
     return await commandInteraction.reply({
-      content: `❌ ${selectedUser.username} does not have an active penalty.`,
-      ephemeral: true
+      content: `❌ <@${selectedUser.id}> does not have an active penalty.`
     });
   }
   
   await removePenalty(selectedUser.id);
   
   await commandInteraction.reply({
-    content: `✅ **Penalty removed**\n\n${selectedUser.username}'s penalty has been cleared. They can now sign up for coffee chats.`,
-    ephemeral: true
+    content: `✅ **Penalty removed** by <@${commandInteraction.user.id}>\n\n<@${selectedUser.id}>'s penalty has been cleared. They can now sign up for coffee chats.`
   });
   
   console.log(`Admin ${commandInteraction.user.id} removed penalty from ${selectedUser.id}`);
@@ -134,8 +129,7 @@ async function handleForceManualPairing(commandInteraction) {
   
   if (userIsPairingWithThemselves) {
     return await commandInteraction.reply({
-      content: '❌ You cannot pair a user with themselves. Please select different users.',
-      ephemeral: true
+      content: '❌ You cannot pair a user with themselves. Please select different users.'
     });
   }
   
@@ -144,17 +138,13 @@ async function handleForceManualPairing(commandInteraction) {
   const allUsersInPairing = [firstUser, secondUser];
   if (optionalThirdUser) allUsersInPairing.push(optionalThirdUser);
   
-  const usernamesJoined = allUsersInPairing.map(user => user.username).join(', ');
-  const trioLabel = optionalThirdUser ? ' (trio)' : '';
+  const userMentions = allUsersInPairing.map(user => `<@${user.id}>`).join(' + ');
+  const trioLabel = optionalThirdUser ? ' (Trio)' : '';
   
   await commandInteraction.reply({
-    content: `✅ **Manual pairing created**${trioLabel}\n\n` +
-             `👥 ${usernamesJoined}\n` +
-             `🎤 Coffee Chat VC ${assignedVoiceChannelNumber}\n\n` +
-             `This pairing has been added to the current week.`,
-    ephemeral: true
+    content: `☕ **Manual pairing created** by <@${commandInteraction.user.id}>${trioLabel}\n\n👥 ${userMentions}\n🎤 Coffee Chat VC ${assignedVoiceChannelNumber}`
   });
   
-  console.log(`Admin ${commandInteraction.user.id} created manual pairing: ${usernamesJoined}`);
+  console.log(`Admin ${commandInteraction.user.id} created manual pairing: ${userMentions}`);
 }
 
