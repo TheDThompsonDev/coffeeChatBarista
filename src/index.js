@@ -7,6 +7,7 @@ import * as leaveCommand from './commands/leave.js';
 import * as statusCommand from './commands/status.js';
 import * as reportCommand from './commands/report.js';
 import * as adminCommand from './commands/admin.js';
+import * as leaderboardCommand from './commands/leaderboard.js';
 
 const discordClient = new Client({
   intents: [
@@ -23,6 +24,7 @@ function buildCoffeeCommandWithAllSubcommands() {
   coffeeSlashCommand.addSubcommand(leaveCommand.data.options[0]);
   coffeeSlashCommand.addSubcommand(statusCommand.data.options[0]);
   coffeeSlashCommand.addSubcommand(reportCommand.data.options[0]);
+  coffeeSlashCommand.addSubcommand(leaderboardCommand.data.options[0]);
   coffeeSlashCommand.addSubcommandGroup(adminCommand.data.options[0]);
   
   return coffeeSlashCommand;
@@ -66,6 +68,8 @@ discordClient.on('interactionCreate', async (receivedInteraction) => {
       await statusCommand.execute(receivedInteraction);
     } else if (selectedSubcommand === 'report') {
       await reportCommand.execute(receivedInteraction);
+    } else if (selectedSubcommand === 'leaderboard') {
+      await leaderboardCommand.execute(receivedInteraction);
     }
   } catch (commandExecutionError) {
     console.error('Error executing command:', commandExecutionError);

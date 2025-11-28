@@ -240,3 +240,30 @@ export async function getRecentHistory(numberOfWeeks) {
   return getHistorySince(startDateForHistory);
 }
 
+export async function getLeaderboard(limit = 10) {
+  const { data: historyData, error } = await supabaseClient
+    .from('history')
+    .select('user_a, user_b, user_c');
+  
+  if (error) throw error;
+  
+  const userChatCounts = new Map();
+  
+  for (const record of historyData) {
+    const usersInRecord = [record.user_a, record.user_b];
+    if (record.user_c) usersInRecord.push(record.user_c);
+    
+    for (const userId of usersInRecord) {
+      const currentCount = userChatCounts.get(userId) || 0;
+      userChatCounts.set(userId, currentCount + 1);
+    }
+  }
+  
+  const sortedLeaderboard = Array.from(userChatCounts.entries())
+    .map(([user_id, chat_count]) => ({ user_id, chat_count }))
+    .sort((a, b) => b.chat_count - a.chat_count)
+    .slice(0, limit);
+  
+  return sortedLeaderboard;
+}
+
