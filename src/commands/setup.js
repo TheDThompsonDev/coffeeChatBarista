@@ -60,13 +60,29 @@ export async function execute(commandInteraction) {
       });
     }
 
-    const guildId = commandInteraction.guild.id;
-    const guildName = commandInteraction.guild.name;
+    const guildId = commandInteraction.guildId;
+    if (!guildId) {
+      return await commandInteraction.reply({
+        content: '❌ This command can only be used in a server.',
+        ephemeral: true
+      });
+    }
+
+    const guildName = commandInteraction.guild?.name || 'Unknown Guild';
     const announcementsChannel = commandInteraction.options.getChannel('announcements');
     const pairingsChannel = commandInteraction.options.getChannel('pairings');
     const moderatorRole = commandInteraction.options.getRole('moderator');
     const pingRole = commandInteraction.options.getRole('ping');
     const signupWindowDescription = getSignupWindowDescription();
+
+    if (!announcementsChannel || !pairingsChannel || !moderatorRole || !pingRole) {
+      return await commandInteraction.reply({
+        content:
+          '❌ Setup options were missing from the interaction payload. ' +
+          'Please wait a minute for slash command sync, then run `/coffee setup` again.',
+        ephemeral: true
+      });
+    }
 
     await upsertGuildSettings(guildId, {
       guild_name: guildName,
@@ -106,7 +122,13 @@ export async function execute(commandInteraction) {
 }
 
 export async function executeSettings(commandInteraction) {
-  const guildId = commandInteraction.guild.id;
+  const guildId = commandInteraction.guildId;
+  if (!guildId) {
+    return await commandInteraction.reply({
+      content: '❌ This command can only be used in a server.',
+      ephemeral: true
+    });
+  }
   
   try {
     const settings = await getGuildSettings(guildId);
