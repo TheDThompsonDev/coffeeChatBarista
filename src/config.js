@@ -15,6 +15,30 @@ for (const environmentVariableKey of requiredEnvironmentVariables) {
   }
 }
 
+function decodeJwtPayload(token) {
+  const segments = token.split('.');
+  if (segments.length !== 3) return null;
+
+  const base64 = segments[1].replace(/-/g, '+').replace(/_/g, '/');
+  const padLength = (4 - (base64.length % 4)) % 4;
+  const paddedBase64 = base64 + '='.repeat(padLength);
+
+  try {
+    const payloadJson = Buffer.from(paddedBase64, 'base64').toString('utf8');
+    return JSON.parse(payloadJson);
+  } catch {
+    return null;
+  }
+}
+
+const supabaseServiceKeyPayload = decodeJwtPayload(process.env.SUPABASE_SERVICE_KEY);
+if (supabaseServiceKeyPayload?.role && supabaseServiceKeyPayload.role !== 'service_role') {
+  throw new Error(
+    `SUPABASE_SERVICE_KEY appears to be role "${supabaseServiceKeyPayload.role}". ` +
+    'Use your Supabase service_role key, not anon/public.'
+  );
+}
+
 export const discord = {
   token: process.env.DISCORD_TOKEN,
   clientId: process.env.DISCORD_CLIENT_ID

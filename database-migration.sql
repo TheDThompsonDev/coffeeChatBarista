@@ -106,6 +106,14 @@ CREATE INDEX IF NOT EXISTS idx_pairings_guild_assigned_vc_id ON current_week_pai
 CREATE INDEX IF NOT EXISTS idx_pending_reports_guild_status ON pending_reports(guild_id, status);
 CREATE INDEX IF NOT EXISTS idx_pending_reports_reported ON pending_reports(guild_id, reported_user_id, status);
 
+-- 11. Ensure server-side bot writes are not blocked by row-level security
+ALTER TABLE IF EXISTS guild_settings DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS profiles DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS current_week_signups DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS current_week_pairings DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS history DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS pending_reports DISABLE ROW LEVEL SECURITY;
+
 -- ============================================
 -- If you have EXISTING data from a single-guild setup,
 -- run this to migrate it (replace YOUR_GUILD_ID):

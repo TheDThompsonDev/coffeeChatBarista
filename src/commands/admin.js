@@ -98,6 +98,31 @@ async function resolveConfiguredTextChannel(commandInteraction, configuredChanne
   }
 }
 
+function getAdminCommandErrorMessage(selectedSubcommand, adminCommandError) {
+  const errorCode = adminCommandError?.code;
+  const errorMessage = String(adminCommandError?.message || '');
+
+  if (
+    selectedSubcommand === 'match' &&
+    errorCode === '42501' &&
+    errorMessage.includes('row-level security policy')
+  ) {
+    return (
+      '❌ Matching failed because Supabase blocked writes to `current_week_pairings` (RLS policy).\n\n' +
+      'Run `database-migration.sql` again (it includes RLS disable statements), then restart the bot and try `/coffee admin match` again.'
+    );
+  }
+
+  if (errorCode === 'PGRST204') {
+    return (
+      '❌ Database schema is out of date for this command.\n\n' +
+      'Please run `database-migration.sql` in Supabase, restart the bot, then try again.'
+    );
+  }
+
+  return '❌ An error occurred while executing the admin command.';
+}
+
 export const data = new SlashCommandBuilder()
   .setName('coffee')
   .setDescription('Coffee chat commands')
@@ -349,15 +374,16 @@ export async function execute(commandInteraction) {
     }
   } catch (adminCommandError) {
     console.error(`Error in /coffee admin ${selectedSubcommand}:`, adminCommandError);
+    const errorMessage = getAdminCommandErrorMessage(selectedSubcommand, adminCommandError);
     
     if (commandInteraction.replied || commandInteraction.deferred) {
       await commandInteraction.followUp({
-        content: '❌ An error occurred while executing the admin command.',
+        content: errorMessage,
         ephemeral: true
       });
     } else {
       await commandInteraction.reply({
-        content: '❌ An error occurred while executing the admin command.',
+        content: errorMessage,
         ephemeral: true
       });
     }
