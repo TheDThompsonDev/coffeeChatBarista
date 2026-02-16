@@ -1,5 +1,6 @@
 import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
 import { getSignupWindowDescription } from '../utils/timezones.js';
+import { getGuildSettings } from '../services/guildSettings.js';
 
 const COFFEE_BROWN_COLOR = '#6F4E37';
 
@@ -13,7 +14,10 @@ export const data = new SlashCommandBuilder()
   );
 
 export async function execute(commandInteraction) {
-  const signupWindow = getSignupWindowDescription();
+  const guildSettings = commandInteraction.guildId
+    ? await getGuildSettings(commandInteraction.guildId).catch(() => null)
+    : null;
+  const signupWindow = getSignupWindowDescription(guildSettings);
   
   const helpEmbed = new EmbedBuilder()
     .setColor(COFFEE_BROWN_COLOR)

@@ -90,7 +90,6 @@ export async function execute(commandInteraction) {
     const pairingsChannel = commandInteraction.options.getChannel('pairings');
     const moderatorRole = commandInteraction.options.getRole('moderator');
     const pingRole = commandInteraction.options.getRole('ping');
-    const signupWindowDescription = getSignupWindowDescription();
 
     if (!announcementsChannel || !pairingsChannel || !moderatorRole || !pingRole) {
       return await commandInteraction.reply({
@@ -135,13 +134,14 @@ export async function execute(commandInteraction) {
       }
     }
 
-    await upsertGuildSettings(guildId, {
+    const updatedSettings = await upsertGuildSettings(guildId, {
       guild_name: guildName,
       announcements_channel_id: announcementsChannel.id,
       pairings_channel_id: pairingsChannel.id,
       moderator_role_id: moderatorRole.id,
       ping_role_id: pingRole.id
     });
+    const signupWindowDescription = getSignupWindowDescription(updatedSettings);
     
     await commandInteraction.reply({
       content: `✅ **Coffee Chat Barista is now configured!**\n\n` +
@@ -152,7 +152,8 @@ export async function execute(commandInteraction) {
                `**Next Steps:**\n` +
                `• Members can now use \`/coffee join\` to sign up\n` +
                `• Use \`/coffee admin announce\` to send the signup announcement\n` +
-               `• Signups open every ${signupWindowDescription} by default`,
+               `• Signups open every ${signupWindowDescription} by default\n` +
+               `• Need holiday timing changes? Use \`/coffee admin schedule\``,
       ephemeral: true
     });
     

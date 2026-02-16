@@ -43,6 +43,7 @@ A Discord bot for facilitating weekly random 1-on-1 coffee chats in developer co
 | `/coffee admin reset` | Clear all signups |
 | `/coffee admin list` | View current week's signups |
 | `/coffee admin match [force:true]` | Manually trigger matching (force required if completions/reports already exist) |
+| `/coffee admin schedule [day] [start_hour] [end_hour]` | View or update your server's weekly schedule |
 | `/coffee admin punish @user` | Apply a no-show penalty after reviewing a report |
 | `/coffee admin dismiss-report <report_id>` | Dismiss a pending no-show report |
 | `/coffee admin unpunish @user` | Remove a user's penalty |
@@ -81,14 +82,16 @@ npm start
 
 ## Weekly Schedule (Central Time)
 
-- **Tuesday 8:00 AM**: Signup announcement posted to all configured servers
-- **Tuesday 8:00 AM - 12:00 PM**: Signup window open
-- **Tuesday 12:00 PM**: Signups close, matching runs, pairings announced + DMs sent
-- **Tuesday - Sunday**: Coffee chats happen (auto-detected via VC or logged with `/coffee complete`)
-- **Thursday 10:00 AM**: Reminder DMs sent to pairs who haven't met yet
-- **Sunday 11:59 PM**: Weekly reset
+Each server has its own schedule:
 
-> **Note:** The Tuesday launch-week schedule auto-reverts to Monday after the override date in `src/config.js` (`COFFEE_LAUNCH_OVERRIDE_UNTIL`).
+- **Signup announcement + signup window open** at configured `day + start_hour`
+- **Matching runs** at configured `day + end_hour`
+- **Reminder DMs** run 2 days after signup day at **10:00 AM CT**
+- **Weekly reset** runs Sunday **11:59 PM CT** globally
+
+Use `/coffee admin schedule` to view the current schedule, or set `day`, `start_hour`, and/or `end_hour` to change it for holidays and special weeks.
+
+> **Defaults:** New servers still use the default schedule in `src/config.js` until changed with `/coffee admin schedule`.
 
 ## Architecture
 

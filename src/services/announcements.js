@@ -1,15 +1,9 @@
 import { EmbedBuilder } from 'discord.js';
-import { SIGNUP_WINDOW } from '../config.js';
+import { formatHour, getResolvedSignupWindow } from '../utils/timezones.js';
 import { getGuildSettings } from './guildSettings.js';
 
 const COFFEE_BROWN_COLOR = '#6F4E37';
 const ERROR_RED_COLOR = '#FF6B6B';
-
-function formatHourForDisplay(hour24) {
-  const hour12 = hour24 > 12 ? hour24 - 12 : hour24;
-  const amPm = hour24 >= 12 ? 'PM' : 'AM';
-  return `${hour12}:00 ${amPm}`;
-}
 
 export async function postSignupAnnouncement(discordClient, guildId, options = {}) {
   const guildSettings = await getGuildSettings(guildId);
@@ -27,7 +21,8 @@ export async function postSignupAnnouncement(discordClient, guildId, options = {
     return;
   }
   
-  const signupCloseTime = formatHourForDisplay(SIGNUP_WINDOW.endHour);
+  const signupWindow = getResolvedSignupWindow(guildSettings);
+  const signupCloseTime = formatHour(signupWindow.endHour);
   
   const signupAnnouncementEmbed = new EmbedBuilder()
     .setColor(COFFEE_BROWN_COLOR)

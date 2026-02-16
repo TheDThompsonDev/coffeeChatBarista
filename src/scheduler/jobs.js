@@ -6,35 +6,52 @@ import {
   clearAllSignups, 
   clearAllPairings,
   savePairings,
+  getAllPairings,
   getIncompletePairings,
   expirePendingReports
 } from '../services/database.js';
 import { runMatching, filterPenalized, filterLeftUsers } from '../services/matching.js';
-import { getAllConfiguredGuilds } from '../services/guildSettings.js';
+import { getAllConfiguredGuilds, markScheduledJobRun } from '../services/guildSettings.js';
+import { getCentralTimeNow, getCurrentWeekStart, getResolvedSignupWindow } from '../utils/timezones.js';
 
 const CENTRAL_TIMEZONE = 'America/Chicago';
 const MINIMUM_SIGNUPS_FOR_MATCHING = 2;
+const SCHEDULE_POLL_CRON = '* * * * *';
+const REMINDER_OFFSET_DAYS = 2;
+const REMINDER_HOUR_CT = 10;
+const inMemoryScheduleJobRuns = new Set();
+
+function getWeekOfDateString(date) {
+  return date.toISOString().split('T')[0];
+}
+
+function createScheduleJobRunKey(guildId, jobType, weekOfDateString) {
+  return `${guildId}:${jobType}:${weekOfDateString}`;
+}
+
+async function markScheduledJobRunSafely(guildId, jobType, weekOfDateString) {
+  const inMemoryRunKey = createScheduleJobRunKey(guildId, jobType, weekOfDateString);
+  inMemoryScheduleJobRuns.add(inMemoryRunKey);
+
+  try {
+    await markScheduledJobRun(guildId, jobType, weekOfDateString);
+  } catch (markError) {
+    console.warn(
+      `[${guildId}] Could not persist ${jobType} schedule marker for week ${weekOfDateString}. ` +
+      `Falling back to in-memory dedupe until restart.`
+    );
+    console.warn(markError);
+  }
+}
 
 export function initializeJobs(discordClient) {
   console.log('Initializing cron jobs...');
   
-  cron.schedule(CRON_SCHEDULES.signupAnnouncement, async () => {
-    console.log('Running job: Signup announcement for all guilds');
+  cron.schedule(SCHEDULE_POLL_CRON, async () => {
     try {
-      await runSignupAnnouncementForAllGuilds(discordClient);
-    } catch (signupAnnouncementError) {
-      console.error('Error in signup announcement job:', signupAnnouncementError);
-    }
-  }, {
-    timezone: CENTRAL_TIMEZONE
-  });
-  
-  cron.schedule(CRON_SCHEDULES.matching, async () => {
-    console.log('Running job: Matching for all guilds');
-    try {
-      await runMatchingForAllGuilds(discordClient);
-    } catch (matchingError) {
-      console.error('Error in matching job:', matchingError);
+      await runDynamicScheduleForAllGuilds(discordClient);
+    } catch (dynamicSchedulerError) {
+      console.error('Error in dynamic schedule job:', dynamicSchedulerError);
     }
   }, {
     timezone: CENTRAL_TIMEZONE
@@ -51,46 +68,86 @@ export function initializeJobs(discordClient) {
     timezone: CENTRAL_TIMEZONE
   });
   
-  cron.schedule(CRON_SCHEDULES.reminder, async () => {
-    console.log('Running job: Reminder for incomplete pairings');
-    try {
-      await runReminderForAllGuilds(discordClient);
-    } catch (reminderError) {
-      console.error('Error in reminder job:', reminderError);
-    }
-  }, {
-    timezone: CENTRAL_TIMEZONE
-  });
-  
   console.log('Cron jobs initialized:');
-  console.log(`- Signup announcement: ${CRON_SCHEDULES.signupAnnouncement} CT`);
-  console.log(`- Matching: ${CRON_SCHEDULES.matching} CT`);
-  console.log(`- Reminder: ${CRON_SCHEDULES.reminder} CT`);
+  console.log(`- Dynamic schedule poll: ${SCHEDULE_POLL_CRON} CT`);
   console.log(`- Weekly reset: ${CRON_SCHEDULES.weeklyReset} CT`);
 }
 
-async function runSignupAnnouncementForAllGuilds(discordClient) {
+async function runDynamicScheduleForAllGuilds(discordClient) {
+  const centralNow = getCentralTimeNow();
+  const currentDayOfWeek = centralNow.getDay();
+  const currentHourOfDay = centralNow.getHours();
+  const currentWeekOfDate = getWeekOfDateString(getCurrentWeekStart());
   const configuredGuilds = await getAllConfiguredGuilds();
-  console.log(`Running signup announcement for ${configuredGuilds.length} guilds`);
-  
-  for (const guildSettings of configuredGuilds) {
-    try {
-      await postSignupAnnouncement(discordClient, guildSettings.guild_id);
-    } catch (guildError) {
-      console.error(`Error posting announcement for guild ${guildSettings.guild_id}:`, guildError);
-    }
-  }
-}
 
-async function runMatchingForAllGuilds(discordClient) {
-  const configuredGuilds = await getAllConfiguredGuilds();
-  console.log(`Running matching for ${configuredGuilds.length} guilds`);
-  
+  if (configuredGuilds.length === 0) {
+    return;
+  }
+
   for (const guildSettings of configuredGuilds) {
+    const guildId = guildSettings.guild_id;
+    if (!guildSettings.announcements_channel_id || !guildSettings.pairings_channel_id) {
+      continue;
+    }
+
+    const signupWindow = getResolvedSignupWindow(guildSettings);
+    const signupInMemoryRunKey = createScheduleJobRunKey(guildId, 'signup_announcement', currentWeekOfDate);
+    const matchingInMemoryRunKey = createScheduleJobRunKey(guildId, 'matching', currentWeekOfDate);
+    const reminderInMemoryRunKey = createScheduleJobRunKey(guildId, 'reminder', currentWeekOfDate);
+
     try {
-      await runMatchingForGuild(discordClient, guildSettings.guild_id);
+      const shouldRunSignupAnnouncement =
+        currentDayOfWeek === signupWindow.dayOfWeek &&
+        currentHourOfDay === signupWindow.startHour &&
+        guildSettings.last_signup_announcement_week !== currentWeekOfDate &&
+        !inMemoryScheduleJobRuns.has(signupInMemoryRunKey);
+
+      if (shouldRunSignupAnnouncement) {
+        await postSignupAnnouncement(discordClient, guildId);
+        await markScheduledJobRunSafely(guildId, 'signup_announcement', currentWeekOfDate);
+        console.log(`[${guildId}] Signup announcement complete for week ${currentWeekOfDate}`);
+      }
+
+      const shouldRunMatching =
+        currentDayOfWeek === signupWindow.dayOfWeek &&
+        currentHourOfDay === signupWindow.endHour &&
+        guildSettings.last_matching_week !== currentWeekOfDate &&
+        !inMemoryScheduleJobRuns.has(matchingInMemoryRunKey);
+
+      if (shouldRunMatching) {
+        const existingPairings = await getAllPairings(guildId);
+        if (existingPairings.length > 0) {
+          console.log(`[${guildId}] Skipping scheduled matching because pairings already exist for this week`);
+          await markScheduledJobRunSafely(guildId, 'matching', currentWeekOfDate);
+          continue;
+        }
+
+        await runMatchingForGuild(discordClient, guildId);
+        await markScheduledJobRunSafely(guildId, 'matching', currentWeekOfDate);
+        console.log(`[${guildId}] Matching complete for week ${currentWeekOfDate}`);
+      }
+
+      const reminderDayOfWeek = (signupWindow.dayOfWeek + REMINDER_OFFSET_DAYS) % 7;
+      const shouldRunReminder =
+        currentDayOfWeek === reminderDayOfWeek &&
+        currentHourOfDay === REMINDER_HOUR_CT &&
+        guildSettings.last_reminder_week !== currentWeekOfDate &&
+        !inMemoryScheduleJobRuns.has(reminderInMemoryRunKey);
+
+      if (shouldRunReminder) {
+        const incompletePairings = await getIncompletePairings(guildId);
+
+        if (incompletePairings.length > 0) {
+          await sendReminderDMs(discordClient, guildId, incompletePairings);
+        } else {
+          console.log(`[${guildId}] All pairings complete, no reminders needed`);
+        }
+
+        await markScheduledJobRunSafely(guildId, 'reminder', currentWeekOfDate);
+        console.log(`[${guildId}] Reminder processing complete for week ${currentWeekOfDate}`);
+      }
     } catch (guildError) {
-      console.error(`Error running matching for guild ${guildSettings.guild_id}:`, guildError);
+      console.error(`Error in dynamic schedule job for guild ${guildId}:`, guildError);
     }
   }
 }
@@ -159,25 +216,6 @@ function attachVoiceChannelIds(pairings, discordGuild) {
       console.warn(
         `[${discordGuild.id}] Could not resolve VC "${assignedChannelName}". Users can still complete manually with /coffee complete.`
       );
-    }
-  }
-}
-
-async function runReminderForAllGuilds(discordClient) {
-  const configuredGuilds = await getAllConfiguredGuilds();
-  console.log(`Running reminder for ${configuredGuilds.length} guilds`);
-  
-  for (const guildSettings of configuredGuilds) {
-    try {
-      const incompletePairings = await getIncompletePairings(guildSettings.guild_id);
-      
-      if (incompletePairings.length > 0) {
-        await sendReminderDMs(discordClient, guildSettings.guild_id, incompletePairings);
-      } else {
-        console.log(`[${guildSettings.guild_id}] All pairings complete, no reminders needed`);
-      }
-    } catch (guildError) {
-      console.error(`Error sending reminders for guild ${guildSettings.guild_id}:`, guildError);
     }
   }
 }

@@ -1,7 +1,7 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { isSignupWindowOpen, getSignupWindowDescription } from '../utils/timezones.js';
 import { removeSignup, isSignedUp } from '../services/database.js';
-import { isGuildConfigured } from '../services/guildSettings.js';
+import { getGuildSettings } from '../services/guildSettings.js';
 
 export const data = new SlashCommandBuilder()
   .setName('coffee')
@@ -24,7 +24,11 @@ export async function execute(commandInteraction) {
   const userId = commandInteraction.user.id;
   
   try {
-    const guildIsConfigured = await isGuildConfigured(guildId);
+    const guildSettings = await getGuildSettings(guildId);
+    const guildIsConfigured = Boolean(
+      guildSettings?.announcements_channel_id &&
+      guildSettings?.pairings_channel_id
+    );
     if (!guildIsConfigured) {
       return await commandInteraction.reply({
         content: '❌ Coffee Chat Barista hasn\'t been set up yet. Ask an admin to run `/coffee setup`.',
@@ -32,9 +36,11 @@ export async function execute(commandInteraction) {
       });
     }
     
-    if (!isSignupWindowOpen()) {
+    if (!isSignupWindowOpen(guildSettings)) {
       return await commandInteraction.reply({
-        content: `❌ Withdrawals are only allowed during the signup window (${getSignupWindowDescription()}).\n\nMatches have already been created. Please coordinate directly with your partner.`,
+        content:
+          `❌ Withdrawals are only allowed during the signup window (${getSignupWindowDescription(guildSettings)}).\n\n` +
+          `Matches have already been created. Please coordinate directly with your partner.`,
         ephemeral: true
       });
     }

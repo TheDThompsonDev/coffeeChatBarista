@@ -1,6 +1,7 @@
 import { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } from 'discord.js';
 import { isModerator } from '../utils/permissions.js';
 import { TIMEZONE_REGIONS } from '../config.js';
+import { formatHour, getResolvedSignupWindow, getSignupWindowDescription } from '../utils/timezones.js';
 import { 
   clearAllSignups, 
   clearAllPairings,
@@ -21,10 +22,13 @@ import {
   getSignupsWithProfiles
 } from '../services/database.js';
 import { postSignupAnnouncement } from '../services/announcements.js';
-import { getGuildSettings } from '../services/guildSettings.js';
+import { getGuildSettings, upsertGuildSettings } from '../services/guildSettings.js';
 import { runMatchingForGuild } from '../scheduler/jobs.js';
 
 const COFFEE_BROWN_COLOR = '#6F4E37';
+const REMINDER_OFFSET_DAYS = 2;
+const REMINDER_HOUR_CT = 10;
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 async function resolveInteractionGuild(commandInteraction) {
   const guildId = commandInteraction.guildId;
@@ -136,6 +140,42 @@ export const data = new SlashCommandBuilder()
               .setName('force')
               .setDescription('Force rematch even if completions/reports already exist this week')
               .setRequired(false)
+          )
+      )
+      .addSubcommand(subcommand =>
+        subcommand
+          .setName('schedule')
+          .setDescription('View or update weekly signup/match schedule')
+          .addIntegerOption(option =>
+            option
+              .setName('day')
+              .setDescription('Signup day of week')
+              .setRequired(false)
+              .addChoices(
+                { name: 'Sunday', value: 0 },
+                { name: 'Monday', value: 1 },
+                { name: 'Tuesday', value: 2 },
+                { name: 'Wednesday', value: 3 },
+                { name: 'Thursday', value: 4 },
+                { name: 'Friday', value: 5 },
+                { name: 'Saturday', value: 6 }
+              )
+          )
+          .addIntegerOption(option =>
+            option
+              .setName('start_hour')
+              .setDescription('Signup start hour in CT (0-23)')
+              .setRequired(false)
+              .setMinValue(0)
+              .setMaxValue(23)
+          )
+          .addIntegerOption(option =>
+            option
+              .setName('end_hour')
+              .setDescription('Signup end hour in CT (1-23, must be after start)')
+              .setRequired(false)
+              .setMinValue(1)
+              .setMaxValue(23)
           )
       )
       .addSubcommand(subcommand =>
@@ -294,6 +334,8 @@ export async function execute(commandInteraction) {
       await handleListSignups(commandInteraction);
     } else if (selectedSubcommand === 'match') {
       await handleManualMatch(commandInteraction);
+    } else if (selectedSubcommand === 'schedule') {
+      await handleSchedule(commandInteraction);
     } else if (selectedSubcommand === 'punish') {
       await handlePunishUser(commandInteraction);
     } else if (selectedSubcommand === 'dismiss-report') {
@@ -551,6 +593,79 @@ async function handleManualMatch(commandInteraction) {
   });
   
   console.log(`Admin ${commandInteraction.user.id} manually triggered matching for guild ${guildId}`);
+}
+
+function getDayName(dayOfWeek) {
+  return DAY_NAMES[dayOfWeek] || `Day ${dayOfWeek}`;
+}
+
+function getReminderScheduleDescription(signupDayOfWeek) {
+  const reminderDayOfWeek = (signupDayOfWeek + REMINDER_OFFSET_DAYS) % 7;
+  return `${getDayName(reminderDayOfWeek)} at ${formatHour(REMINDER_HOUR_CT)} CT`;
+}
+
+async function handleSchedule(commandInteraction) {
+  const guildId = commandInteraction.guildId;
+  const selectedDayOfWeek = commandInteraction.options.getInteger('day');
+  const selectedStartHour = commandInteraction.options.getInteger('start_hour');
+  const selectedEndHour = commandInteraction.options.getInteger('end_hour');
+
+  const hasAnyOverrides =
+    selectedDayOfWeek !== null ||
+    selectedStartHour !== null ||
+    selectedEndHour !== null;
+
+  const guildSettings = await getGuildSettings(guildId);
+  const currentSignupWindow = getResolvedSignupWindow(guildSettings);
+
+  if (!hasAnyOverrides) {
+    return await commandInteraction.reply({
+      content:
+        `📅 **Current schedule**\n\n` +
+        `Signups + announcement: **${getSignupWindowDescription(currentSignupWindow)}**\n` +
+        `Matching: **${getDayName(currentSignupWindow.dayOfWeek)} at ${formatHour(currentSignupWindow.endHour)} CT**\n` +
+        `Reminder DMs: **${getReminderScheduleDescription(currentSignupWindow.dayOfWeek)}**\n\n` +
+        `To update, run \`/coffee admin schedule\` and provide any combination of \`day\`, \`start_hour\`, and \`end_hour\`.`,
+      ephemeral: true
+    });
+  }
+
+  const updatedSignupWindow = {
+    dayOfWeek: selectedDayOfWeek ?? currentSignupWindow.dayOfWeek,
+    startHour: selectedStartHour ?? currentSignupWindow.startHour,
+    endHour: selectedEndHour ?? currentSignupWindow.endHour
+  };
+
+  if (updatedSignupWindow.endHour <= updatedSignupWindow.startHour) {
+    return await commandInteraction.reply({
+      content:
+        `❌ Invalid schedule: \`end_hour\` must be later than \`start_hour\`.\n` +
+        `Current start/end: ${formatHour(updatedSignupWindow.startHour)} -> ${formatHour(updatedSignupWindow.endHour)} CT.`,
+      ephemeral: true
+    });
+  }
+
+  const updatedSettings = await upsertGuildSettings(guildId, {
+    signup_day_of_week: updatedSignupWindow.dayOfWeek,
+    signup_start_hour: updatedSignupWindow.startHour,
+    signup_end_hour: updatedSignupWindow.endHour
+  });
+  const resolvedUpdatedSignupWindow = getResolvedSignupWindow(updatedSettings);
+
+  await commandInteraction.reply({
+    content:
+      `✅ **Schedule updated**\n\n` +
+      `Signups + announcement: **${getSignupWindowDescription(resolvedUpdatedSignupWindow)}**\n` +
+      `Matching: **${getDayName(resolvedUpdatedSignupWindow.dayOfWeek)} at ${formatHour(resolvedUpdatedSignupWindow.endHour)} CT**\n` +
+      `Reminder DMs: **${getReminderScheduleDescription(resolvedUpdatedSignupWindow.dayOfWeek)}**\n\n` +
+      `This takes effect immediately for signup-window checks and the next automated run.`,
+    ephemeral: true
+  });
+
+  console.log(
+    `Admin ${commandInteraction.user.id} updated schedule for guild ${guildId}: ` +
+    `day=${resolvedUpdatedSignupWindow.dayOfWeek}, start=${resolvedUpdatedSignupWindow.startHour}, end=${resolvedUpdatedSignupWindow.endHour}`
+  );
 }
 
 async function handlePunishUser(commandInteraction) {

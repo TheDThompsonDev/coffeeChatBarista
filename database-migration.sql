@@ -14,6 +14,14 @@ CREATE TABLE IF NOT EXISTS guild_settings (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 1b. Add per-guild schedule columns (safe to run repeatedly)
+ALTER TABLE guild_settings ADD COLUMN IF NOT EXISTS signup_day_of_week SMALLINT;
+ALTER TABLE guild_settings ADD COLUMN IF NOT EXISTS signup_start_hour SMALLINT;
+ALTER TABLE guild_settings ADD COLUMN IF NOT EXISTS signup_end_hour SMALLINT;
+ALTER TABLE guild_settings ADD COLUMN IF NOT EXISTS last_signup_announcement_week DATE;
+ALTER TABLE guild_settings ADD COLUMN IF NOT EXISTS last_matching_week DATE;
+ALTER TABLE guild_settings ADD COLUMN IF NOT EXISTS last_reminder_week DATE;
+
 -- 2. Add guild_id to profiles table
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS guild_id TEXT;
 
