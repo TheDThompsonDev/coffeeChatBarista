@@ -15,7 +15,13 @@ export const data = new SlashCommandBuilder()
   );
 
 export async function execute(commandInteraction) {
-  const guildId = commandInteraction.guild.id;
+  const guildId = commandInteraction.guildId;
+  if (!guildId) {
+    return await commandInteraction.reply({
+      content: '❌ This command can only be used in a server.',
+      ephemeral: true
+    });
+  }
   
   try {
     const guildIsConfigured = await isGuildConfigured(guildId);
@@ -52,9 +58,16 @@ export async function execute(commandInteraction) {
     
   } catch (leaderboardCommandError) {
     console.error('Error in /coffee leaderboard:', leaderboardCommandError);
-    await commandInteraction.reply({
-      content: '❌ An error occurred while fetching the leaderboard. Please try again later.'
-    });
+    const errorPayload = {
+      content: '❌ An error occurred while fetching the leaderboard. Please try again later.',
+      ephemeral: true
+    };
+
+    if (commandInteraction.replied || commandInteraction.deferred) {
+      await commandInteraction.followUp(errorPayload);
+    } else {
+      await commandInteraction.reply(errorPayload);
+    }
   }
 }
 

@@ -101,7 +101,8 @@ export async function execute(commandInteraction) {
                `**Next Steps:**\n` +
                `• Members can now use \`/coffee join\` to sign up\n` +
                `• Use \`/coffee admin announce\` to send the signup announcement\n` +
-               `• Signups open every ${signupWindowDescription} by default`
+               `• Signups open every ${signupWindowDescription} by default`,
+      ephemeral: true
     });
     
     console.log(`Guild ${guildId} (${guildName}) completed setup`);

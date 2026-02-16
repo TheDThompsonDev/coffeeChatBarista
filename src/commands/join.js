@@ -14,6 +14,7 @@ import { isGuildConfigured } from '../services/guildSettings.js';
 export const data = new SlashCommandBuilder()
   .setName('coffee')
   .setDescription('Coffee chat commands')
+  .setDMPermission(false)
   .addSubcommand(subcommand =>
     subcommand
       .setName('join')
@@ -32,7 +33,14 @@ export const data = new SlashCommandBuilder()
   );
 
 export async function execute(commandInteraction) {
-  const guildId = commandInteraction.guild.id;
+  const guildId = commandInteraction.guildId;
+  if (!guildId) {
+    return await commandInteraction.reply({
+      content: '❌ This command can only be used in a server.',
+      ephemeral: true
+    });
+  }
+
   const selectedTimezoneRegion = commandInteraction.options.getString('timezone');
   const userId = commandInteraction.user.id;
   const username = commandInteraction.user.username;
@@ -84,9 +92,15 @@ export async function execute(commandInteraction) {
     
   } catch (joinCommandError) {
     console.error('Error in /coffee join:', joinCommandError);
-    await commandInteraction.reply({
+    const errorPayload = {
       content: '❌ An error occurred while signing you up. Please try again later.',
       ephemeral: true
-    });
+    };
+
+    if (commandInteraction.replied || commandInteraction.deferred) {
+      await commandInteraction.followUp(errorPayload);
+    } else {
+      await commandInteraction.reply(errorPayload);
+    }
   }
 }

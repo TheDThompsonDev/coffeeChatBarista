@@ -156,7 +156,7 @@ discordClient.on('guildDelete', async (removedGuild) => {
   }
 });
 
-discordClient.once('ready', () => {
+discordClient.once('clientReady', () => {
   console.log(`✅ Logged in as ${discordClient.user.tag}`);
   console.log(`📊 Serving ${discordClient.guilds.cache.size} guild(s)`);
   

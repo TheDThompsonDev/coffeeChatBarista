@@ -18,7 +18,14 @@ export const data = new SlashCommandBuilder()
   );
 
 export async function execute(commandInteraction) {
-  const guildId = commandInteraction.guild.id;
+  const guildId = commandInteraction.guildId;
+  if (!guildId) {
+    return await commandInteraction.reply({
+      content: '❌ This command can only be used in a server.',
+      ephemeral: true
+    });
+  }
+
   const reportingUserId = commandInteraction.user.id;
   const reportedDiscordUser = commandInteraction.options.getUser('user');
   const reportedUserId = reportedDiscordUser.id;
@@ -106,9 +113,15 @@ export async function execute(commandInteraction) {
     
   } catch (reportCommandError) {
     console.error('Error in /coffee report:', reportCommandError);
-    await commandInteraction.reply({
+    const errorPayload = {
       content: '❌ An error occurred while submitting your report. Please try again later.',
       ephemeral: true
-    });
+    };
+
+    if (commandInteraction.replied || commandInteraction.deferred) {
+      await commandInteraction.followUp(errorPayload);
+    } else {
+      await commandInteraction.reply(errorPayload);
+    }
   }
 }

@@ -26,6 +26,12 @@ import { runMatchingForGuild } from '../scheduler/jobs.js';
 
 const COFFEE_BROWN_COLOR = '#6F4E37';
 
+async function resolveInteractionGuild(commandInteraction) {
+  const guildId = commandInteraction.guildId;
+  if (!guildId) return null;
+  return commandInteraction.guild ?? await commandInteraction.client.guilds.fetch(guildId).catch(() => null);
+}
+
 export const data = new SlashCommandBuilder()
   .setName('coffee')
   .setDescription('Coffee chat commands')
@@ -167,16 +173,31 @@ export const data = new SlashCommandBuilder()
   );
 
 export async function execute(commandInteraction) {
-  const guildId = commandInteraction.guild.id;
+  const guildId = commandInteraction.guildId;
+  if (!guildId) {
+    return await commandInteraction.reply({
+      content: '❌ This command can only be used in a server.',
+      ephemeral: true
+    });
+  }
+
+  const interactionGuild = await resolveInteractionGuild(commandInteraction);
+  if (!interactionGuild) {
+    return await commandInteraction.reply({
+      content: '❌ I could not access this server context. Please try again in a server channel.',
+      ephemeral: true
+    });
+  }
   
   const guildIsConfigured = await isGuildConfigured(guildId);
   if (!guildIsConfigured) {
     return await commandInteraction.reply({
-      content: '❌ Coffee Chat Barista hasn\'t been set up yet. Ask an admin to run `/coffee setup`.'
+      content: '❌ Coffee Chat Barista hasn\'t been set up yet. Ask an admin to run `/coffee setup`.',
+      ephemeral: true
     });
   }
   
-  const commandingGuildMember = await commandInteraction.guild.members.fetch(commandInteraction.user.id);
+  const commandingGuildMember = await interactionGuild.members.fetch(commandInteraction.user.id);
   const userIsModerator = await isModerator(commandingGuildMember);
   if (!userIsModerator) {
     return await commandInteraction.reply({
@@ -232,17 +253,64 @@ async function handleAnnounce(commandInteraction) {
     ephemeral: true
   });
   
-  const guildId = commandInteraction.guild.id;
+  const guildId = commandInteraction.guildId;
+  const guildSettings = await getGuildSettings(guildId);
+
+  if (!guildSettings?.announcements_channel_id) {
+    return await commandInteraction.editReply({
+      content:
+        '❌ Signup announcement failed: no announcements channel is configured. ' +
+        'Run `/coffee setup` again to reconfigure channels and roles.'
+    });
+  }
+
+  const announcementsChannel = await commandInteraction.client.channels
+    .fetch(guildSettings.announcements_channel_id)
+    .catch(() => null);
+
+  if (!announcementsChannel) {
+    return await commandInteraction.editReply({
+      content:
+        `❌ Signup announcement failed: I cannot access <#${guildSettings.announcements_channel_id}>. ` +
+        'The channel may have been deleted or my permissions may be missing.'
+    });
+  }
+
   await postSignupAnnouncement(commandInteraction.client, guildId);
+
+  await commandInteraction.editReply({
+    content: `✅ Signup announcement sent to <#${guildSettings.announcements_channel_id}>.`
+  });
   
   console.log(`Admin ${commandInteraction.user.id} manually triggered signup announcement for guild ${guildId}`);
 }
 
 async function handleSay(commandInteraction) {
-  const guildId = commandInteraction.guild.id;
+  const guildId = commandInteraction.guildId;
   const guildSettings = await getGuildSettings(guildId);
   const customMessage = commandInteraction.options.getString('message');
-  const announcementsChannel = await commandInteraction.client.channels.fetch(guildSettings.announcements_channel_id);
+
+  if (!guildSettings?.announcements_channel_id) {
+    return await commandInteraction.reply({
+      content:
+        '❌ Cannot post message: no announcements channel is configured. ' +
+        'Run `/coffee setup` to configure channels.',
+      ephemeral: true
+    });
+  }
+
+  const announcementsChannel = await commandInteraction.client.channels
+    .fetch(guildSettings.announcements_channel_id)
+    .catch(() => null);
+
+  if (!announcementsChannel) {
+    return await commandInteraction.reply({
+      content:
+        `❌ Cannot post message: I cannot access <#${guildSettings.announcements_channel_id}>. ` +
+        'The channel may have been deleted or my permissions may be missing.',
+      ephemeral: true
+    });
+  }
   
   await announcementsChannel.send(customMessage);
   
@@ -255,7 +323,7 @@ async function handleSay(commandInteraction) {
 }
 
 async function handleResetSignups(commandInteraction) {
-  const guildId = commandInteraction.guild.id;
+  const guildId = commandInteraction.guildId;
   await clearAllSignups(guildId);
   
   await commandInteraction.reply({
@@ -267,7 +335,7 @@ async function handleResetSignups(commandInteraction) {
 }
 
 async function handleListSignups(commandInteraction) {
-  const guildId = commandInteraction.guild.id;
+  const guildId = commandInteraction.guildId;
   const signups = await getSignupsWithProfiles(guildId);
   
   if (signups.length === 0) {
@@ -305,7 +373,7 @@ async function handleListSignups(commandInteraction) {
 }
 
 async function handleManualMatch(commandInteraction) {
-  const guildId = commandInteraction.guild.id;
+  const guildId = commandInteraction.guildId;
   const forceRematch = commandInteraction.options.getBoolean('force') || false;
   const completedPairingsCount = await getCompletedPairingsCount(guildId);
   const pendingReportsCount = await getPendingReportsCount(guildId);
@@ -340,7 +408,7 @@ async function handleManualMatch(commandInteraction) {
 }
 
 async function handlePunishUser(commandInteraction) {
-  const guildId = commandInteraction.guild.id;
+  const guildId = commandInteraction.guildId;
   const selectedUser = commandInteraction.options.getUser('user');
   const optionalReportId = commandInteraction.options.getInteger('report_id');
 
@@ -396,7 +464,7 @@ async function handlePunishUser(commandInteraction) {
 }
 
 async function handleDismissReport(commandInteraction) {
-  const guildId = commandInteraction.guild.id;
+  const guildId = commandInteraction.guildId;
   const reportId = commandInteraction.options.getInteger('report_id');
 
   const pendingReport = await getPendingReportById(guildId, reportId);
@@ -427,7 +495,7 @@ async function handleDismissReport(commandInteraction) {
 }
 
 async function handleUnpunishUser(commandInteraction) {
-  const guildId = commandInteraction.guild.id;
+  const guildId = commandInteraction.guildId;
   const selectedUser = commandInteraction.options.getUser('user');
   
   const selectedUserProfile = await getProfile(guildId, selectedUser.id);
@@ -471,7 +539,7 @@ function resolveAssignedVoiceChannelId(discordGuild, assignedVoiceChannelName) {
 }
 
 async function handleForceManualPairing(commandInteraction) {
-  const guildId = commandInteraction.guild.id;
+  const guildId = commandInteraction.guildId;
   const firstUser = commandInteraction.options.getUser('user1');
   const secondUser = commandInteraction.options.getUser('user2');
   const optionalThirdUser = commandInteraction.options.getUser('user3');
@@ -488,8 +556,16 @@ async function handleForceManualPairing(commandInteraction) {
   }
 
   const assignedVoiceChannelName = `Coffee Chat VC ${assignedVoiceChannelNumber}`;
-  await commandInteraction.guild.channels.fetch();
-  const assignedVoiceChannelId = resolveAssignedVoiceChannelId(commandInteraction.guild, assignedVoiceChannelName);
+  const interactionGuild = await resolveInteractionGuild(commandInteraction);
+  if (!interactionGuild) {
+    return await commandInteraction.reply({
+      content: '❌ I could not load this server. Try again from a server text channel.',
+      ephemeral: true
+    });
+  }
+
+  await interactionGuild.channels.fetch();
+  const assignedVoiceChannelId = resolveAssignedVoiceChannelId(interactionGuild, assignedVoiceChannelName);
 
   await createManualPairing(
     guildId,
@@ -518,7 +594,7 @@ async function handleForceManualPairing(commandInteraction) {
 }
 
 async function handleAddSignup(commandInteraction) {
-  const guildId = commandInteraction.guild.id;
+  const guildId = commandInteraction.guildId;
   const targetUser = commandInteraction.options.getUser('user');
   const selectedTimezone = commandInteraction.options.getString('timezone');
   

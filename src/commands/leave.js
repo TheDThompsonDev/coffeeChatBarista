@@ -13,7 +13,14 @@ export const data = new SlashCommandBuilder()
   );
 
 export async function execute(commandInteraction) {
-  const guildId = commandInteraction.guild.id;
+  const guildId = commandInteraction.guildId;
+  if (!guildId) {
+    return await commandInteraction.reply({
+      content: '❌ This command can only be used in a server.',
+      ephemeral: true
+    });
+  }
+
   const userId = commandInteraction.user.id;
   
   try {
@@ -49,9 +56,15 @@ export async function execute(commandInteraction) {
     
   } catch (leaveCommandError) {
     console.error('Error in /coffee leave:', leaveCommandError);
-    await commandInteraction.reply({
+    const errorPayload = {
       content: '❌ An error occurred while removing your signup. Please try again later.',
       ephemeral: true
-    });
+    };
+
+    if (commandInteraction.replied || commandInteraction.deferred) {
+      await commandInteraction.followUp(errorPayload);
+    } else {
+      await commandInteraction.reply(errorPayload);
+    }
   }
 }

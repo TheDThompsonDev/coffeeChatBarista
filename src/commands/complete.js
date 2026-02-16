@@ -12,7 +12,22 @@ export const data = new SlashCommandBuilder()
   );
 
 export async function execute(commandInteraction) {
-  const guildId = commandInteraction.guild.id;
+  const guildId = commandInteraction.guildId;
+  if (!guildId) {
+    return await commandInteraction.reply({
+      content: '❌ This command can only be used in a server.',
+      ephemeral: true
+    });
+  }
+
+  const interactionGuild = commandInteraction.guild ?? await commandInteraction.client.guilds.fetch(guildId).catch(() => null);
+  if (!interactionGuild) {
+    return await commandInteraction.reply({
+      content: '❌ I could not access this server context. Please try again in a server channel.',
+      ephemeral: true
+    });
+  }
+
   const userId = commandInteraction.user.id;
   
   try {
@@ -54,7 +69,7 @@ export async function execute(commandInteraction) {
     
     for (const partnerId of partnersToNotify) {
       try {
-        const partnerMember = await commandInteraction.guild.members.fetch(partnerId);
+        const partnerMember = await interactionGuild.members.fetch(partnerId);
         await partnerMember.send(
           `☕ **Coffee chat logged!** <@${userId}> confirmed that your coffee chat is complete. Great job connecting!`
         );
@@ -65,9 +80,15 @@ export async function execute(commandInteraction) {
     
   } catch (completeCommandError) {
     console.error('Error in /coffee complete:', completeCommandError);
-    await commandInteraction.reply({
+    const errorPayload = {
       content: '❌ An error occurred. Please try again later.',
       ephemeral: true
-    });
+    };
+
+    if (commandInteraction.replied || commandInteraction.deferred) {
+      await commandInteraction.followUp(errorPayload);
+    } else {
+      await commandInteraction.reply(errorPayload);
+    }
   }
 }

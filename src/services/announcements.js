@@ -13,6 +13,11 @@ function formatHourForDisplay(hour24) {
 
 export async function postSignupAnnouncement(discordClient, guildId) {
   const guildSettings = await getGuildSettings(guildId);
+  if (!guildSettings?.announcements_channel_id || !guildSettings?.pairings_channel_id) {
+    console.warn(`[${guildId}] Missing guild settings for signup announcement. Skipping.`);
+    return;
+  }
+
   const announcementsChannel = await discordClient.channels.fetch(guildSettings.announcements_channel_id).catch(() => null);
   
   if (!announcementsChannel) {
@@ -49,6 +54,11 @@ export async function postSignupAnnouncement(discordClient, guildId) {
 
 export async function postPairings(discordClient, guildId, weeklyPairings) {
   const guildSettings = await getGuildSettings(guildId);
+  if (!guildSettings?.pairings_channel_id) {
+    console.warn(`[${guildId}] Missing pairings channel in guild settings. Skipping.`);
+    return;
+  }
+
   const pairingsChannel = await discordClient.channels.fetch(guildSettings.pairings_channel_id).catch(() => null);
   
   if (!pairingsChannel) {
@@ -189,6 +199,11 @@ export async function sendReminderDMs(discordClient, guildId, incompletePairings
 
 export async function postNotEnoughSignups(discordClient, guildId) {
   const guildSettings = await getGuildSettings(guildId);
+  if (!guildSettings?.pairings_channel_id) {
+    console.warn(`[${guildId}] Missing pairings channel in guild settings. Skipping.`);
+    return;
+  }
+
   const pairingsChannel = await discordClient.channels.fetch(guildSettings.pairings_channel_id).catch(() => null);
   
   if (!pairingsChannel) {

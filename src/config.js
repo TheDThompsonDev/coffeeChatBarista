@@ -44,7 +44,7 @@ export const MATCHING_CONFIG = {
 const DEFAULT_SCHEDULE = {
   dayOfWeek: 1, // Monday
   startHour: 8,
-  endHour: 12
+  endHour: 15
 };
 
 const LAUNCH_WEEK_OVERRIDE = {
