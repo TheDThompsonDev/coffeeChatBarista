@@ -7,6 +7,15 @@ const supabaseClient = createClient(supabaseConfig.url, supabaseConfig.serviceKe
 const POSTGRES_NOT_FOUND_ERROR_CODE = 'PGRST116';
 const REPORT_STATUS_PENDING = 'pending';
 
+function isMissingProfilesUsernameColumnError(supabaseError) {
+  return (
+    supabaseError?.code === 'PGRST204' &&
+    typeof supabaseError?.message === 'string' &&
+    supabaseError.message.includes("'username'") &&
+    supabaseError.message.includes("'profiles'")
+  );
+}
+
 function getWeekOfDateString(date) {
   return date.toISOString().split('T')[0];
 }
@@ -27,19 +36,41 @@ function normalizePairingUsers(userA, userB, userC = null) {
 }
 
 export async function upsertProfile(guildId, userId, username, timezoneRegion) {
-  const { data, error } = await supabaseClient
+  const baseProfilePayload = {
+    guild_id: guildId,
+    user_id: userId,
+    timezone_region: timezoneRegion
+  };
+  const profilePayloadWithUsername = {
+    ...baseProfilePayload,
+    username: username
+  };
+
+  let { data, error } = await supabaseClient
     .from('profiles')
-    .upsert({
-      guild_id: guildId,
-      user_id: userId,
-      username: username,
-      timezone_region: timezoneRegion
-    }, {
+    .upsert(profilePayloadWithUsername, {
       onConflict: 'guild_id,user_id'
     })
     .select()
     .single();
-  
+
+  if (error && isMissingProfilesUsernameColumnError(error)) {
+    console.warn(
+      `[${guildId}] profiles.username column missing. Retrying profile upsert without username field.`
+    );
+
+    const retryResult = await supabaseClient
+      .from('profiles')
+      .upsert(baseProfilePayload, {
+        onConflict: 'guild_id,user_id'
+      })
+      .select()
+      .single();
+
+    data = retryResult.data;
+    error = retryResult.error;
+  }
+
   if (error) throw error;
   return data;
 }
@@ -74,18 +105,36 @@ export async function isPenalized(guildId, userId) {
 
 export async function applyPenalty(guildId, userId, username) {
   const penaltyExpiresAt = addWeeks(new Date(), 2);
-  
-  const { error } = await supabaseClient
+
+  const basePenaltyPayload = {
+    guild_id: guildId,
+    user_id: userId,
+    penalty_expires_at: penaltyExpiresAt.toISOString()
+  };
+  const penaltyPayloadWithUsername = {
+    ...basePenaltyPayload,
+    username: username
+  };
+
+  let { error } = await supabaseClient
     .from('profiles')
-    .upsert({
-      guild_id: guildId,
-      user_id: userId,
-      username: username,
-      penalty_expires_at: penaltyExpiresAt.toISOString()
-    }, {
+    .upsert(penaltyPayloadWithUsername, {
       onConflict: 'guild_id,user_id'
     });
-  
+
+  if (error && isMissingProfilesUsernameColumnError(error)) {
+    console.warn(
+      `[${guildId}] profiles.username column missing. Retrying penalty upsert without username field.`
+    );
+
+    const retryResult = await supabaseClient
+      .from('profiles')
+      .upsert(basePenaltyPayload, {
+        onConflict: 'guild_id,user_id'
+      });
+    error = retryResult.error;
+  }
+
   if (error) throw error;
   return penaltyExpiresAt;
 }

@@ -96,6 +96,26 @@ export async function execute(commandInteraction) {
     
   } catch (joinCommandError) {
     console.error('Error in /coffee join:', joinCommandError);
+    if (
+      joinCommandError?.code === 'PGRST204' &&
+      typeof joinCommandError?.message === 'string' &&
+      joinCommandError.message.includes("'profiles'")
+    ) {
+      const schemaErrorPayload = {
+        content:
+          '❌ Database schema is out of date for this command. ' +
+          'Please ask the bot operator to re-run `database-migration.sql`, then try again.',
+        ephemeral: true
+      };
+
+      if (commandInteraction.replied || commandInteraction.deferred) {
+        await commandInteraction.followUp(schemaErrorPayload);
+      } else {
+        await commandInteraction.reply(schemaErrorPayload);
+      }
+      return;
+    }
+
     const errorPayload = {
       content: '❌ An error occurred while signing you up. Please try again later.',
       ephemeral: true

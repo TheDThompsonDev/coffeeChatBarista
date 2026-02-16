@@ -24,6 +24,9 @@ ALTER TABLE guild_settings ADD COLUMN IF NOT EXISTS last_reminder_week DATE;
 
 -- 2. Add guild_id to profiles table
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS guild_id TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS username TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS timezone_region TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS penalty_expires_at TIMESTAMPTZ;
 
 -- 3. Add guild_id to current_week_signups table
 ALTER TABLE current_week_signups ADD COLUMN IF NOT EXISTS guild_id TEXT;
