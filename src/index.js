@@ -1,9 +1,10 @@
-import { Client, GatewayIntentBits, REST, Routes, Collection, EmbedBuilder } from 'discord.js';
+import { Client, GatewayIntentBits, REST, Routes, Collection, EmbedBuilder, Partials } from 'discord.js';
 import { discord } from './config.js';
 import { initializeJobs } from './scheduler/jobs.js';
 import { deleteGuildData } from './services/database.js';
 import { upsertGuildSettings, deleteGuildSettings } from './services/guildSettings.js';
 import { initializeVoiceTracking } from './services/voiceTracking.js';
+import { initializeReactionRoleTracking } from './services/reactionRoles.js';
 
 import * as joinCommand from './commands/join.js';
 import * as leaveCommand from './commands/leave.js';
@@ -19,7 +20,15 @@ const discordClient = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.GuildVoiceStates
+    GatewayIntentBits.GuildVoiceStates,
+    GatewayIntentBits.GuildMessageReactions
+  ],
+  partials: [
+    Partials.Message,
+    Partials.Channel,
+    Partials.Reaction,
+    Partials.User,
+    Partials.GuildMember
   ]
 });
 
@@ -162,6 +171,7 @@ discordClient.once('clientReady', () => {
   
   initializeJobs(discordClient);
   initializeVoiceTracking(discordClient);
+  initializeReactionRoleTracking(discordClient);
   
   console.log('🤖 Coffee Chat Barista is ready!');
 });

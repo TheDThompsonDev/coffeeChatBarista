@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } from 'discord.js';
+import { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits, ChannelType } from 'discord.js';
 import { isModerator } from '../utils/permissions.js';
 import { TIMEZONE_REGIONS } from '../config.js';
 import { formatHour, getResolvedSignupWindow, getSignupWindowDescription } from '../utils/timezones.js';
@@ -205,6 +205,18 @@ export const data = new SlashCommandBuilder()
       )
       .addSubcommand(subcommand =>
         subcommand
+          .setName('role-panel')
+          .setDescription('Post a ☕ reaction panel for Coffee-Chatters role opt-in')
+          .addChannelOption(option =>
+            option
+              .setName('channel')
+              .setDescription('Channel for the role panel (defaults to announcements channel)')
+              .setRequired(false)
+              .addChannelTypes(ChannelType.GuildText)
+          )
+      )
+      .addSubcommand(subcommand =>
+        subcommand
           .setName('punish')
           .setDescription('Apply a no-show penalty to a user')
           .addUserOption(option =>
@@ -361,6 +373,8 @@ export async function execute(commandInteraction) {
       await handleManualMatch(commandInteraction);
     } else if (selectedSubcommand === 'schedule') {
       await handleSchedule(commandInteraction);
+    } else if (selectedSubcommand === 'role-panel') {
+      await handleRolePanel(commandInteraction);
     } else if (selectedSubcommand === 'punish') {
       await handlePunishUser(commandInteraction);
     } else if (selectedSubcommand === 'dismiss-report') {
@@ -691,6 +705,131 @@ async function handleSchedule(commandInteraction) {
   console.log(
     `Admin ${commandInteraction.user.id} updated schedule for guild ${guildId}: ` +
     `day=${resolvedUpdatedSignupWindow.dayOfWeek}, start=${resolvedUpdatedSignupWindow.startHour}, end=${resolvedUpdatedSignupWindow.endHour}`
+  );
+}
+
+async function handleRolePanel(commandInteraction) {
+  const guildId = commandInteraction.guildId;
+  const guildSettings = await getGuildSettings(guildId);
+  const selectedChannel = commandInteraction.options.getChannel('channel');
+  const targetChannelId = selectedChannel?.id || guildSettings?.announcements_channel_id;
+
+  if (!guildSettings?.ping_role_id) {
+    return await commandInteraction.reply({
+      content:
+        '❌ Role panel failed: no ping role is configured. Run `/coffee setup` to select your Coffee-Chatters role.',
+      ephemeral: true
+    });
+  }
+
+  if (!targetChannelId) {
+    return await commandInteraction.reply({
+      content:
+        '❌ Role panel failed: no target channel found. Choose a channel option or run `/coffee setup` first.',
+      ephemeral: true
+    });
+  }
+
+  const interactionGuild = await resolveInteractionGuild(commandInteraction);
+  if (!interactionGuild) {
+    return await commandInteraction.reply({
+      content: '❌ Role panel failed: could not load this server context. Please try again.',
+      ephemeral: true
+    });
+  }
+
+  const botGuildMember =
+    interactionGuild.members.me ??
+    await interactionGuild.members.fetchMe().catch(() => null);
+  const targetRole =
+    interactionGuild.roles.cache.get(guildSettings.ping_role_id) ??
+    await interactionGuild.roles.fetch(guildSettings.ping_role_id).catch(() => null);
+
+  if (!targetRole) {
+    return await commandInteraction.reply({
+      content:
+        '❌ Role panel failed: the configured ping role no longer exists. Run `/coffee setup` and choose the role again.',
+      ephemeral: true
+    });
+  }
+
+  if (botGuildMember) {
+    if (!botGuildMember.permissions.has(PermissionFlagsBits.ManageRoles)) {
+      return await commandInteraction.reply({
+        content:
+          '❌ Role panel failed: I need the **Manage Roles** permission to assign/remove roles from reactions.',
+        ephemeral: true
+      });
+    }
+
+    if (targetRole.position >= botGuildMember.roles.highest.position) {
+      return await commandInteraction.reply({
+        content:
+          `❌ Role panel failed: my highest role is below <@&${targetRole.id}>.\n` +
+          'Move my bot role above that role in Server Settings → Roles.',
+        ephemeral: true
+      });
+    }
+  }
+
+  const {
+    channel: targetChannel,
+    fetchError: targetChannelFetchError
+  } = await resolveConfiguredTextChannel(commandInteraction, targetChannelId);
+
+  if (!targetChannel) {
+    const fetchErrorHint = targetChannelFetchError?.code
+      ? ` (Discord API error: ${targetChannelFetchError.code})`
+      : '';
+
+    return await commandInteraction.reply({
+      content:
+        `❌ Role panel failed: I cannot access <#${targetChannelId}>${fetchErrorHint}. ` +
+        'Check channel permissions and try again.',
+      ephemeral: true
+    });
+  }
+
+  const rolePanelEmbed = new EmbedBuilder()
+    .setColor(COFFEE_BROWN_COLOR)
+    .setTitle('☕ Coffee Chat Role Opt-In')
+    .setDescription(
+      `React with ☕ to get <@&${guildSettings.ping_role_id}>.\n` +
+      `Remove your reaction any time to remove the role.\n\n` +
+      `This role is used for weekly coffee chat signup pings.`
+    )
+    .setFooter({ text: 'Coffee Chat Barista • Reaction roles' })
+    .setTimestamp();
+
+  const rolePanelMessage = await targetChannel.send({
+    embeds: [rolePanelEmbed]
+  });
+
+  let rolePanelReactWarning = '';
+  try {
+    await rolePanelMessage.react('☕');
+  } catch (reactionError) {
+    console.warn(`Could not add ☕ reaction to role panel message ${rolePanelMessage.id} in guild ${guildId}`);
+    rolePanelReactWarning =
+      '\n⚠️ I could not pre-add the ☕ reaction. Members can still react manually if allowed in that channel.';
+  }
+
+  await upsertGuildSettings(guildId, {
+    reaction_role_message_id: rolePanelMessage.id,
+    reaction_role_channel_id: targetChannel.id
+  });
+
+  const rolePanelMessageLink = `https://discord.com/channels/${guildId}/${targetChannel.id}/${rolePanelMessage.id}`;
+  await commandInteraction.reply({
+    content:
+      `✅ Role panel posted in <#${targetChannel.id}>.\n` +
+      `🔗 ${rolePanelMessageLink}` +
+      rolePanelReactWarning,
+    ephemeral: true
+  });
+
+  console.log(
+    `Admin ${commandInteraction.user.id} posted reaction role panel in guild ${guildId} (message ${rolePanelMessage.id})`
   );
 }
 

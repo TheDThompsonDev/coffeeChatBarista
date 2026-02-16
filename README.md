@@ -11,6 +11,7 @@ A Discord bot for facilitating weekly random 1-on-1 coffee chats in developer co
 - Automatic trio creation for odd number of signups
 - **Completion Tracking** - Auto-detects coffee chats via voice channels + manual `/coffee complete`
 - **DM Notifications** - Participants are DM'd their match and reminded if they haven't met
+- **Reaction Roles** - Members can opt into Coffee-Chatters role by reacting with ☕
 - No-show reporting with admin review before penalties are applied
 - Admin commands for moderation (list signups, trigger matching, manage penalties)
 - Leaderboard to track top participants by completed chats
@@ -44,6 +45,7 @@ A Discord bot for facilitating weekly random 1-on-1 coffee chats in developer co
 | `/coffee admin list` | View current week's signups |
 | `/coffee admin match [force:true]` | Manually trigger matching (force required if completions/reports already exist) |
 | `/coffee admin schedule [day] [start_hour] [end_hour]` | View or update your server's weekly schedule |
+| `/coffee admin role-panel [channel]` | Post ☕ reaction panel for Coffee-Chatters role opt-in |
 | `/coffee admin punish @user` | Apply a no-show penalty after reviewing a report |
 | `/coffee admin dismiss-report <report_id>` | Dismiss a pending no-show report |
 | `/coffee admin unpunish @user` | Remove a user's penalty |

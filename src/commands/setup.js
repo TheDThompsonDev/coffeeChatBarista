@@ -153,7 +153,8 @@ export async function execute(commandInteraction) {
                `• Members can now use \`/coffee join\` to sign up\n` +
                `• Use \`/coffee admin announce\` to send the signup announcement\n` +
                `• Signups open every ${signupWindowDescription} by default\n` +
-               `• Need holiday timing changes? Use \`/coffee admin schedule\``,
+               `• Need holiday timing changes? Use \`/coffee admin schedule\`\n` +
+               `• Optional: post a ☕ role opt-in panel with \`/coffee admin role-panel\``,
       ephemeral: true
     });
     
