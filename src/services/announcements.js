@@ -11,14 +11,16 @@ function formatHourForDisplay(hour24) {
   return `${hour12}:00 ${amPm}`;
 }
 
-export async function postSignupAnnouncement(discordClient, guildId) {
+export async function postSignupAnnouncement(discordClient, guildId, options = {}) {
   const guildSettings = await getGuildSettings(guildId);
   if (!guildSettings?.announcements_channel_id || !guildSettings?.pairings_channel_id) {
     console.warn(`[${guildId}] Missing guild settings for signup announcement. Skipping.`);
     return;
   }
 
-  const announcementsChannel = await discordClient.channels.fetch(guildSettings.announcements_channel_id).catch(() => null);
+  const announcementsChannel =
+    options.announcementsChannel ??
+    await discordClient.channels.fetch(guildSettings.announcements_channel_id).catch(() => null);
   
   if (!announcementsChannel) {
     console.warn(`[${guildId}] Announcements channel ${guildSettings.announcements_channel_id} not found or inaccessible. Skipping.`);

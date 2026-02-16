@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
+import { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } from 'discord.js';
 import { isModerator } from '../utils/permissions.js';
 import { TIMEZONE_REGIONS } from '../config.js';
 import { 
@@ -51,6 +51,47 @@ function hasModeratorRoleFromInteraction(commandInteraction, moderatorRoleId) {
   }
 
   return false;
+}
+
+const REQUIRED_ANNOUNCEMENT_PERMISSIONS = [
+  [PermissionFlagsBits.ViewChannel, 'View Channel'],
+  [PermissionFlagsBits.SendMessages, 'Send Messages'],
+  [PermissionFlagsBits.EmbedLinks, 'Embed Links']
+];
+
+function getMissingAnnouncementPermissionsForCurrentChannel(commandInteraction, targetChannelId) {
+  if (commandInteraction.channelId !== targetChannelId || !commandInteraction.appPermissions) {
+    return [];
+  }
+
+  return REQUIRED_ANNOUNCEMENT_PERMISSIONS
+    .filter(([permissionBit]) => !commandInteraction.appPermissions.has(permissionBit))
+    .map(([, permissionName]) => permissionName);
+}
+
+async function resolveConfiguredTextChannel(commandInteraction, configuredChannelId) {
+  if (!configuredChannelId) {
+    return { channel: null, fetchError: null };
+  }
+
+  if (
+    commandInteraction.channelId === configuredChannelId &&
+    commandInteraction.channel?.isTextBased?.() &&
+    !commandInteraction.channel?.isDMBased?.()
+  ) {
+    return { channel: commandInteraction.channel, fetchError: null };
+  }
+
+  try {
+    const fetchedChannel = await commandInteraction.client.channels.fetch(configuredChannelId);
+    if (fetchedChannel?.isTextBased?.() && !fetchedChannel?.isDMBased?.()) {
+      return { channel: fetchedChannel, fetchError: null };
+    }
+
+    return { channel: null, fetchError: null };
+  } catch (fetchError) {
+    return { channel: null, fetchError };
+  }
 }
 
 export const data = new SlashCommandBuilder()
@@ -298,19 +339,55 @@ async function handleAnnounce(commandInteraction) {
     });
   }
 
-  const announcementsChannel = await commandInteraction.client.channels
-    .fetch(guildSettings.announcements_channel_id)
-    .catch(() => null);
+  const {
+    channel: announcementsChannel,
+    fetchError: announcementsChannelFetchError
+  } = await resolveConfiguredTextChannel(commandInteraction, guildSettings.announcements_channel_id);
 
   if (!announcementsChannel) {
+    const missingPermissions = getMissingAnnouncementPermissionsForCurrentChannel(
+      commandInteraction,
+      guildSettings.announcements_channel_id
+    );
+    const missingPermissionsHint = missingPermissions.length
+      ? ` Missing permissions: **${missingPermissions.join(', ')}**.`
+      : '';
+    const fetchErrorHint = announcementsChannelFetchError?.code
+      ? ` (Discord API error: ${announcementsChannelFetchError.code})`
+      : '';
+
     return await commandInteraction.editReply({
       content:
-        `❌ Signup announcement failed: I cannot access <#${guildSettings.announcements_channel_id}>. ` +
-        'The channel may have been deleted or my permissions may be missing.'
+        `❌ Signup announcement failed: I cannot access <#${guildSettings.announcements_channel_id}>${fetchErrorHint}. ` +
+        `The channel may have been deleted or my permissions may be missing.` +
+        missingPermissionsHint
     });
   }
 
-  await postSignupAnnouncement(commandInteraction.client, guildId);
+  try {
+    await postSignupAnnouncement(commandInteraction.client, guildId, { announcementsChannel });
+  } catch (announcementError) {
+    console.error(`Failed manual signup announcement for guild ${guildId}:`, announcementError);
+
+    const missingPermissions = getMissingAnnouncementPermissionsForCurrentChannel(
+      commandInteraction,
+      guildSettings.announcements_channel_id
+    );
+    const missingPermissionsHint = missingPermissions.length
+      ? ` Missing permissions: **${missingPermissions.join(', ')}**.`
+      : '';
+    const sendErrorHint = announcementError?.code
+      ? ` (Discord API error: ${announcementError.code})`
+      : '';
+
+    return await commandInteraction.editReply({
+      content:
+        `❌ Signup announcement failed while posting in <#${guildSettings.announcements_channel_id}>${sendErrorHint}. ` +
+        `Please make sure I have **View Channel**, **Send Messages**, and **Embed Links** there.` +
+        missingPermissionsHint +
+        ` Ephemeral command replies can still work even if normal channel posting is blocked.`
+    });
+  }
 
   await commandInteraction.editReply({
     content: `✅ Signup announcement sent to <#${guildSettings.announcements_channel_id}>.`
@@ -333,20 +410,55 @@ async function handleSay(commandInteraction) {
     });
   }
 
-  const announcementsChannel = await commandInteraction.client.channels
-    .fetch(guildSettings.announcements_channel_id)
-    .catch(() => null);
+  const {
+    channel: announcementsChannel,
+    fetchError: announcementsChannelFetchError
+  } = await resolveConfiguredTextChannel(commandInteraction, guildSettings.announcements_channel_id);
 
   if (!announcementsChannel) {
+    const missingPermissions = getMissingAnnouncementPermissionsForCurrentChannel(
+      commandInteraction,
+      guildSettings.announcements_channel_id
+    );
+    const missingPermissionsHint = missingPermissions.length
+      ? ` Missing permissions: **${missingPermissions.join(', ')}**.`
+      : '';
+    const fetchErrorHint = announcementsChannelFetchError?.code
+      ? ` (Discord API error: ${announcementsChannelFetchError.code})`
+      : '';
+
     return await commandInteraction.reply({
       content:
-        `❌ Cannot post message: I cannot access <#${guildSettings.announcements_channel_id}>. ` +
-        'The channel may have been deleted or my permissions may be missing.',
+        `❌ Cannot post message: I cannot access <#${guildSettings.announcements_channel_id}>${fetchErrorHint}. ` +
+        `The channel may have been deleted or my permissions may be missing.` +
+        missingPermissionsHint,
       ephemeral: true
     });
   }
   
-  await announcementsChannel.send(customMessage);
+  try {
+    await announcementsChannel.send(customMessage);
+  } catch (sayError) {
+    console.error(`Failed admin say message for guild ${guildId}:`, sayError);
+
+    const missingPermissions = getMissingAnnouncementPermissionsForCurrentChannel(
+      commandInteraction,
+      guildSettings.announcements_channel_id
+    );
+    const missingPermissionsHint = missingPermissions.length
+      ? ` Missing permissions: **${missingPermissions.join(', ')}**.`
+      : '';
+    const sendErrorHint = sayError?.code ? ` (Discord API error: ${sayError.code})` : '';
+
+    return await commandInteraction.reply({
+      content:
+        `❌ Cannot post message in <#${guildSettings.announcements_channel_id}>${sendErrorHint}. ` +
+        `Please make sure I have **View Channel** and **Send Messages** there.` +
+        missingPermissionsHint +
+        ` Ephemeral command replies can still work even if normal channel posting is blocked.`,
+      ephemeral: true
+    });
+  }
   
   await commandInteraction.reply({
     content: `✅ Message posted to <#${guildSettings.announcements_channel_id}>`,

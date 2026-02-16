@@ -51,6 +51,23 @@ function hasAdminPermission(commandInteraction) {
   return false;
 }
 
+const REQUIRED_CHANNEL_POST_PERMISSIONS = [
+  [PermissionFlagsBits.ViewChannel, 'View Channel'],
+  [PermissionFlagsBits.SendMessages, 'Send Messages'],
+  [PermissionFlagsBits.EmbedLinks, 'Embed Links']
+];
+
+function getMissingChannelPermissions(channel, guildMember) {
+  const channelPermissions = channel?.permissionsFor?.(guildMember);
+  if (!channelPermissions?.has) {
+    return [];
+  }
+
+  return REQUIRED_CHANNEL_POST_PERMISSIONS
+    .filter(([permissionBit]) => !channelPermissions.has(permissionBit))
+    .map(([, permissionName]) => permissionName);
+}
+
 export async function execute(commandInteraction) {
   try {
     if (!hasAdminPermission(commandInteraction)) {
@@ -82,6 +99,40 @@ export async function execute(commandInteraction) {
           'Please wait a minute for slash command sync, then run `/coffee setup` again.',
         ephemeral: true
       });
+    }
+
+    const interactionGuild =
+      commandInteraction.guild ??
+      await commandInteraction.client.guilds.fetch(guildId).catch(() => null);
+    const botGuildMember =
+      interactionGuild?.members?.me ??
+      await interactionGuild?.members.fetchMe().catch(() => null);
+
+    if (botGuildMember) {
+      const missingAnnouncementsPermissions = getMissingChannelPermissions(
+        announcementsChannel,
+        botGuildMember
+      );
+      const missingPairingsPermissions = getMissingChannelPermissions(pairingsChannel, botGuildMember);
+
+      if (missingAnnouncementsPermissions.length || missingPairingsPermissions.length) {
+        const announcementLine = missingAnnouncementsPermissions.length
+          ? `📢 <#${announcementsChannel.id}>: ${missingAnnouncementsPermissions.join(', ')}\n`
+          : '';
+        const pairingLine = missingPairingsPermissions.length
+          ? `☕ <#${pairingsChannel.id}>: ${missingPairingsPermissions.join(', ')}\n`
+          : '';
+
+        return await commandInteraction.reply({
+          content:
+            '❌ I cannot post in one or more selected channels.\n\n' +
+            'Please grant my role these permissions, then run `/coffee setup` again:\n' +
+            announcementLine +
+            pairingLine +
+            '\nEphemeral command replies can still work even when normal channel posting is blocked.',
+          ephemeral: true
+        });
+      }
     }
 
     await upsertGuildSettings(guildId, {
