@@ -21,7 +21,7 @@ import {
   getSignupsWithProfiles
 } from '../services/database.js';
 import { postSignupAnnouncement } from '../services/announcements.js';
-import { getGuildSettings, isGuildConfigured } from '../services/guildSettings.js';
+import { getGuildSettings } from '../services/guildSettings.js';
 import { runMatchingForGuild } from '../scheduler/jobs.js';
 
 const COFFEE_BROWN_COLOR = '#6F4E37';
@@ -30,6 +30,27 @@ async function resolveInteractionGuild(commandInteraction) {
   const guildId = commandInteraction.guildId;
   if (!guildId) return null;
   return commandInteraction.guild ?? await commandInteraction.client.guilds.fetch(guildId).catch(() => null);
+}
+
+function hasModeratorRoleFromInteraction(commandInteraction, moderatorRoleId) {
+  if (!moderatorRoleId) return false;
+
+  const interactionMember = commandInteraction.member;
+  if (!interactionMember) return false;
+
+  if (interactionMember.roles?.cache?.has) {
+    return interactionMember.roles.cache.has(moderatorRoleId);
+  }
+
+  if (Array.isArray(interactionMember.roles)) {
+    return interactionMember.roles.includes(moderatorRoleId);
+  }
+
+  if (Array.isArray(interactionMember.roles?._roles)) {
+    return interactionMember.roles._roles.includes(moderatorRoleId);
+  }
+
+  return false;
 }
 
 export const data = new SlashCommandBuilder()
@@ -181,24 +202,37 @@ export async function execute(commandInteraction) {
     });
   }
 
-  const interactionGuild = await resolveInteractionGuild(commandInteraction);
-  if (!interactionGuild) {
-    return await commandInteraction.reply({
-      content: '❌ I could not access this server context. Please try again in a server channel.',
-      ephemeral: true
-    });
-  }
-  
-  const guildIsConfigured = await isGuildConfigured(guildId);
+  const guildSettings = await getGuildSettings(guildId);
+  const guildIsConfigured = Boolean(
+    guildSettings?.announcements_channel_id &&
+      guildSettings?.pairings_channel_id &&
+      guildSettings?.moderator_role_id
+  );
   if (!guildIsConfigured) {
     return await commandInteraction.reply({
-      content: '❌ Coffee Chat Barista hasn\'t been set up yet. Ask an admin to run `/coffee setup`.',
+      content:
+        '❌ Coffee Chat Barista hasn\'t been fully set up yet. Ask an admin to run `/coffee setup`.',
       ephemeral: true
     });
   }
-  
-  const commandingGuildMember = await interactionGuild.members.fetch(commandInteraction.user.id);
-  const userIsModerator = await isModerator(commandingGuildMember);
+
+  let userIsModerator = hasModeratorRoleFromInteraction(
+    commandInteraction,
+    guildSettings.moderator_role_id
+  );
+
+  if (!userIsModerator) {
+    const interactionGuild = await resolveInteractionGuild(commandInteraction);
+    if (interactionGuild) {
+      const commandingGuildMember = await interactionGuild.members
+        .fetch(commandInteraction.user.id)
+        .catch(() => null);
+      if (commandingGuildMember) {
+        userIsModerator = await isModerator(commandingGuildMember);
+      }
+    }
+  }
+
   if (!userIsModerator) {
     return await commandInteraction.reply({
       content: '❌ You do not have permission to use admin commands.',
