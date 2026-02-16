@@ -145,7 +145,7 @@ export async function runMatching(guildId, eligibleSignups, client) {
   
   for (let pairIndex = 0; pairIndex < createdPairs.length; pairIndex++) {
     const voiceChannelNumber = (pairIndex % VC_CONFIG.totalVCs) + 1;
-    createdPairs[pairIndex].assigned_vc = `${VC_CONFIG.vcNamePrefix} ${voiceChannelNumber}`;
+    createdPairs[pairIndex].assigned_vc = `${VC_CONFIG.vcNamePrefix}${voiceChannelNumber.toString().padStart(2, '0')}`;
     
     if (pairIndex >= VC_CONFIG.totalVCs) {
       createdPairs[pairIndex].needsCoordination = true;

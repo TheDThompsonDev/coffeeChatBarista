@@ -33,7 +33,7 @@ export const TIMEZONE_REGIONS = {
 
 export const VC_CONFIG = {
   totalVCs: 10,
-  vcNamePrefix: 'coffee-chat-1'
+  vcNamePrefix: 'coffee-chat-'
 };
 
 export const MATCHING_CONFIG = {
