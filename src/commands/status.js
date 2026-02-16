@@ -6,6 +6,7 @@ import {
   getUserPairing,
   isPenalized 
 } from '../services/database.js';
+import { isGuildConfigured } from '../services/guildSettings.js';
 
 const COFFEE_BROWN_COLOR = '#6F4E37';
 
@@ -19,13 +20,22 @@ export const data = new SlashCommandBuilder()
   );
 
 export async function execute(commandInteraction) {
+  const guildId = commandInteraction.guild.id;
   const userId = commandInteraction.user.id;
   
   try {
-    const userProfile = await getProfile(userId);
-    const userIsSignedUp = await isSignedUp(userId);
-    const userCurrentPairing = await getUserPairing(userId);
-    const userIsCurrentlyPenalized = await isPenalized(userId);
+    const guildIsConfigured = await isGuildConfigured(guildId);
+    if (!guildIsConfigured) {
+      return await commandInteraction.reply({
+        content: '❌ Coffee Chat Barista hasn\'t been set up yet. Ask an admin to run `/coffee setup`.',
+        ephemeral: true
+      });
+    }
+    
+    const userProfile = await getProfile(guildId, userId);
+    const userIsSignedUp = await isSignedUp(guildId, userId);
+    const userCurrentPairing = await getUserPairing(guildId, userId);
+    const userIsCurrentlyPenalized = await isPenalized(guildId, userId);
     
     const statusEmbed = new EmbedBuilder()
       .setColor(COFFEE_BROWN_COLOR)
@@ -61,6 +71,16 @@ export async function execute(commandInteraction) {
       if (userCurrentPairing.user_c) {
         statusDescription += `ℹ️ This is a trio (3 people)\n`;
       }
+      
+      statusDescription += '\n';
+      
+      if (userCurrentPairing.completed_at) {
+        const method = userCurrentPairing.completion_method === 'vc_auto' ? 'auto-detected via voice chat' : 'manually confirmed';
+        statusDescription += `✅ **Coffee chat complete** (${method})\n`;
+      } else {
+        statusDescription += `⏳ **Coffee chat not yet logged**\n`;
+        statusDescription += `Use a voice channel together or run \`/coffee complete\` when done.\n`;
+      }
     } else {
       statusDescription += '**Current Match:** None\n';
     }
@@ -78,14 +98,15 @@ export async function execute(commandInteraction) {
     statusEmbed.setDescription(statusDescription);
     
     await commandInteraction.reply({
-      embeds: [statusEmbed]
+      embeds: [statusEmbed],
+      ephemeral: true
     });
     
   } catch (statusCommandError) {
     console.error('Error in /coffee status:', statusCommandError);
     await commandInteraction.reply({
-      content: '❌ An error occurred while fetching your status. Please try again later.'
+      content: '❌ An error occurred while fetching your status. Please try again later.',
+      ephemeral: true
     });
   }
 }
-

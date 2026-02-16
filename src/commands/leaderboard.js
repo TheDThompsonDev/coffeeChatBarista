@@ -1,5 +1,6 @@
 import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
 import { getLeaderboard } from '../services/database.js';
+import { isGuildConfigured } from '../services/guildSettings.js';
 
 const COFFEE_BROWN_COLOR = '#6F4E37';
 const LEADERBOARD_SIZE = 10;
@@ -10,16 +11,25 @@ export const data = new SlashCommandBuilder()
   .addSubcommand(subcommand =>
     subcommand
       .setName('leaderboard')
-      .setDescription('See the top coffee chat participants')
+      .setDescription('See the top completed coffee chat participants')
   );
 
 export async function execute(commandInteraction) {
+  const guildId = commandInteraction.guild.id;
+  
   try {
-    const leaderboardData = await getLeaderboard(LEADERBOARD_SIZE);
+    const guildIsConfigured = await isGuildConfigured(guildId);
+    if (!guildIsConfigured) {
+      return await commandInteraction.reply({
+        content: '❌ Coffee Chat Barista hasn\'t been set up yet. Ask an admin to run `/coffee setup`.'
+      });
+    }
+    
+    const leaderboardData = await getLeaderboard(guildId, LEADERBOARD_SIZE);
     
     if (leaderboardData.length === 0) {
       return await commandInteraction.reply({
-        content: '☕ No coffee chats have been recorded yet. Be the first to sign up!'
+        content: '☕ No completed coffee chats have been recorded yet. Be the first to connect!'
       });
     }
     
@@ -31,7 +41,7 @@ export async function execute(commandInteraction) {
     
     const leaderboardEmbed = new EmbedBuilder()
       .setColor(COFFEE_BROWN_COLOR)
-      .setTitle('☕ Coffee Chat Leaderboard')
+      .setTitle('☕ Completed Coffee Chat Leaderboard')
       .setDescription(leaderboardLines.join('\n'))
       .setFooter({ text: 'Keep chatting to climb the ranks!' })
       .setTimestamp();

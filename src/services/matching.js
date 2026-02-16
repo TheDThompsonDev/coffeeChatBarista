@@ -1,4 +1,4 @@
-import { getSignupsWithProfiles, getRecentHistory } from './database.js';
+import { getRecentHistory } from './database.js';
 import { MATCHING_CONFIG, VC_CONFIG, TIMEZONE_REGIONS } from '../config.js';
 
 function createAlphabeticalPairKey(userA, userB) {
@@ -84,8 +84,8 @@ function removeElementFromArray(arrayToModify, elementToRemove) {
   }
 }
 
-export async function runMatching(eligibleSignups, client) {
-  const pairingHistory = await getRecentHistory(MATCHING_CONFIG.historyWeeks);
+export async function runMatching(guildId, eligibleSignups, client) {
+  const pairingHistory = await getRecentHistory(guildId, MATCHING_CONFIG.historyWeeks);
   const setOfHistoricalPairs = buildSetOfHistoricalPairs(pairingHistory);
   const mapOfPairToDate = buildMapOfPairKeyToMostRecentDate(pairingHistory);
   

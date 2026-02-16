@@ -5,11 +5,6 @@ dotenv.config();
 const requiredEnvironmentVariables = [
   'DISCORD_TOKEN',
   'DISCORD_CLIENT_ID',
-  'DISCORD_GUILD_ID',
-  'CHANNEL_ANNOUNCEMENTS',
-  'CHANNEL_PAIRINGS',
-  'ROLE_MODERATOR',
-  'ROLE_COFFEE_CHATTERS',
   'SUPABASE_URL',
   'SUPABASE_SERVICE_KEY'
 ];
@@ -22,16 +17,7 @@ for (const environmentVariableKey of requiredEnvironmentVariables) {
 
 export const discord = {
   token: process.env.DISCORD_TOKEN,
-  clientId: process.env.DISCORD_CLIENT_ID,
-  guildId: process.env.DISCORD_GUILD_ID,
-  channels: {
-    announcements: process.env.CHANNEL_ANNOUNCEMENTS,
-    pairings: process.env.CHANNEL_PAIRINGS
-  },
-  roles: {
-    moderator: process.env.ROLE_MODERATOR,
-    coffeeChatters: process.env.ROLE_COFFEE_CHATTERS
-  }
+  clientId: process.env.DISCORD_CLIENT_ID
 };
 
 export const supabase = {
@@ -55,15 +41,39 @@ export const MATCHING_CONFIG = {
   penaltyWeeks: 2
 };
 
+const DEFAULT_SCHEDULE = {
+  dayOfWeek: 1, // Monday
+  startHour: 8,
+  endHour: 12
+};
+
+const LAUNCH_WEEK_OVERRIDE = {
+  dayOfWeek: 2, // Tuesday
+  // Override auto-disables after this timestamp.
+  // Override with env var if needed.
+  untilIso: process.env.COFFEE_LAUNCH_OVERRIDE_UNTIL || '2026-02-20T00:00:00-06:00'
+};
+
+const launchOverrideUntil = new Date(LAUNCH_WEEK_OVERRIDE.untilIso);
+const useLaunchWeekSchedule = !Number.isNaN(launchOverrideUntil.valueOf()) && new Date() < launchOverrideUntil;
+const activeSchedule = useLaunchWeekSchedule
+  ? {
+      dayOfWeek: LAUNCH_WEEK_OVERRIDE.dayOfWeek,
+      startHour: DEFAULT_SCHEDULE.startHour,
+      endHour: DEFAULT_SCHEDULE.endHour
+    }
+  : DEFAULT_SCHEDULE;
+
 export const CRON_SCHEDULES = {
-  signupAnnouncement: '30 14 * * 5',
-  matching: '30 18 * * 5',
-  weeklyReset: '59 23 * * 0'
+  signupAnnouncement: `0 ${activeSchedule.startHour} * * ${activeSchedule.dayOfWeek}`,
+  matching: `0 ${activeSchedule.endHour} * * ${activeSchedule.dayOfWeek}`,
+  weeklyReset: '59 23 * * 0',
+  reminder: '0 10 * * 4'
 };
 
 export const SIGNUP_WINDOW = {
-  dayOfWeek: 5,
-  startHour: 14,
-  endHour: 19
+  dayOfWeek: activeSchedule.dayOfWeek,
+  startHour: activeSchedule.startHour,
+  endHour: activeSchedule.endHour
 };
 

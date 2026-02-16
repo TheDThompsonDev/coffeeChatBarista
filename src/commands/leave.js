@@ -1,6 +1,7 @@
 import { SlashCommandBuilder } from 'discord.js';
-import { isSignupWindowOpen } from '../utils/timezones.js';
+import { isSignupWindowOpen, getSignupWindowDescription } from '../utils/timezones.js';
 import { removeSignup, isSignedUp } from '../services/database.js';
+import { isGuildConfigured } from '../services/guildSettings.js';
 
 export const data = new SlashCommandBuilder()
   .setName('coffee')
@@ -12,33 +13,45 @@ export const data = new SlashCommandBuilder()
   );
 
 export async function execute(commandInteraction) {
+  const guildId = commandInteraction.guild.id;
   const userId = commandInteraction.user.id;
   
   try {
+    const guildIsConfigured = await isGuildConfigured(guildId);
+    if (!guildIsConfigured) {
+      return await commandInteraction.reply({
+        content: '❌ Coffee Chat Barista hasn\'t been set up yet. Ask an admin to run `/coffee setup`.',
+        ephemeral: true
+      });
+    }
+    
     if (!isSignupWindowOpen()) {
       return await commandInteraction.reply({
-        content: '❌ Withdrawals are only allowed during the signup window (Monday 8:00 AM - 12:00 PM CT).\n\nMatches have already been created. Please coordinate directly with your partner.'
+        content: `❌ Withdrawals are only allowed during the signup window (${getSignupWindowDescription()}).\n\nMatches have already been created. Please coordinate directly with your partner.`,
+        ephemeral: true
       });
     }
     
-    const userIsCurrentlySignedUp = await isSignedUp(userId);
+    const userIsCurrentlySignedUp = await isSignedUp(guildId, userId);
     if (!userIsCurrentlySignedUp) {
       return await commandInteraction.reply({
-        content: `❌ <@${userId}> is not signed up for this week's coffee chat.`
+        content: '❌ You\'re not signed up for this week\'s coffee chat.',
+        ephemeral: true
       });
     }
     
-    await removeSignup(userId);
+    await removeSignup(guildId, userId);
     
     await commandInteraction.reply({
-      content: `👋 <@${userId}> has withdrawn from this week's coffee chat signups.`
+      content: '👋 You\'ve withdrawn from this week\'s coffee chat signups.',
+      ephemeral: true
     });
     
   } catch (leaveCommandError) {
     console.error('Error in /coffee leave:', leaveCommandError);
     await commandInteraction.reply({
-      content: '❌ An error occurred while removing your signup. Please try again later.'
+      content: '❌ An error occurred while removing your signup. Please try again later.',
+      ephemeral: true
     });
   }
 }
-

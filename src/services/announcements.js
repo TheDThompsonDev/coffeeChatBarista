@@ -1,5 +1,6 @@
 import { EmbedBuilder } from 'discord.js';
-import { discord, SIGNUP_WINDOW } from '../config.js';
+import { SIGNUP_WINDOW } from '../config.js';
+import { getGuildSettings } from './guildSettings.js';
 
 const COFFEE_BROWN_COLOR = '#6F4E37';
 const ERROR_RED_COLOR = '#FF6B6B';
@@ -10,8 +11,14 @@ function formatHourForDisplay(hour24) {
   return `${hour12}:00 ${amPm}`;
 }
 
-export async function postSignupAnnouncement(discordClient) {
-  const announcementsChannel = await discordClient.channels.fetch(discord.channels.announcements);
+export async function postSignupAnnouncement(discordClient, guildId) {
+  const guildSettings = await getGuildSettings(guildId);
+  const announcementsChannel = await discordClient.channels.fetch(guildSettings.announcements_channel_id).catch(() => null);
+  
+  if (!announcementsChannel) {
+    console.warn(`[${guildId}] Announcements channel ${guildSettings.announcements_channel_id} not found or inaccessible. Skipping.`);
+    return;
+  }
   
   const signupCloseTime = formatHourForDisplay(SIGNUP_WINDOW.endHour);
   
@@ -24,7 +31,7 @@ export async function postSignupAnnouncement(discordClient) {
       '• Use `/coffee join <timezone>` to sign up\n' +
       '• Choose your timezone: AMERICAS, EMEA, or APAC\n' +
       `• Signups close today at **${signupCloseTime} CT**\n` +
-      '• Matches will be posted in <#' + discord.channels.pairings + '>\n\n' +
+      '• Matches will be posted in <#' + guildSettings.pairings_channel_id + '>\n\n' +
       '**Remember:**\n' +
       '• If you sign up, please show up!\n' +
       '• No-shows can be reported and result in a 2-week ban\n' +
@@ -34,24 +41,30 @@ export async function postSignupAnnouncement(discordClient) {
     .setTimestamp();
   
   await announcementsChannel.send({
-    content: `<@&${discord.roles.coffeeChatters}>`,
+    content: `<@&${guildSettings.ping_role_id}>`,
     embeds: [signupAnnouncementEmbed]
   });
-  console.log('Posted signup announcement');
+  console.log(`Posted signup announcement for guild ${guildId}`);
 }
 
-export async function postPairings(discordClient, weeklyPairings) {
-  const pairingsChannel = await discordClient.channels.fetch(discord.channels.pairings);
+export async function postPairings(discordClient, guildId, weeklyPairings) {
+  const guildSettings = await getGuildSettings(guildId);
+  const pairingsChannel = await discordClient.channels.fetch(guildSettings.pairings_channel_id).catch(() => null);
+  
+  if (!pairingsChannel) {
+    console.warn(`[${guildId}] Pairings channel ${guildSettings.pairings_channel_id} not found or inaccessible. Skipping.`);
+    return;
+  }
   
   if (weeklyPairings.length === 0) {
     const noSignupsEmbed = new EmbedBuilder()
       .setColor(ERROR_RED_COLOR)
       .setTitle('☕ Coffee Chats This Week')
-      .setDescription('Not enough signups this week. Better luck next Monday!')
+      .setDescription('Not enough signups this week. Better luck next week!')
       .setTimestamp();
     
     await pairingsChannel.send({ embeds: [noSignupsEmbed] });
-    console.log('Posted no-signups message');
+    console.log(`Posted no-signups message for guild ${guildId}`);
     return;
   }
   
@@ -93,22 +106,97 @@ export async function postPairings(discordClient, weeklyPairings) {
   }
   
   const totalMessagesPosted = Math.ceil(weeklyPairings.length / PAIRINGS_PER_MESSAGE);
-  console.log(`Posted ${weeklyPairings.length} pairings in ${totalMessagesPosted} messages`);
+  console.log(`Posted ${weeklyPairings.length} pairings in ${totalMessagesPosted} messages for guild ${guildId}`);
 }
 
-export async function postNotEnoughSignups(discordClient) {
-  const pairingsChannel = await discordClient.channels.fetch(discord.channels.pairings);
+export async function sendPairingDMs(discordClient, guildId, weeklyPairings) {
+  const discordGuild = await discordClient.guilds.fetch(guildId);
+  let dmsSent = 0;
+  let dmsFailed = 0;
+  
+  for (const pairing of weeklyPairings) {
+    const allUsersInPairing = [pairing.user_a, pairing.user_b];
+    if (pairing.user_c) allUsersInPairing.push(pairing.user_c);
+    
+    for (const userId of allUsersInPairing) {
+      const partners = allUsersInPairing
+        .filter(id => id !== userId)
+        .map(id => `<@${id}>`)
+        .join(' and ');
+      
+      const trioNote = pairing.user_c ? ' (trio)' : '';
+      
+      try {
+        const member = await discordGuild.members.fetch(userId);
+        await member.send(
+          `☕ **You've been paired for this week's coffee chat!**${trioNote}\n\n` +
+          `👥 Your partner: ${partners}\n` +
+          `🎤 Assigned VC: **${pairing.assigned_vc}**\n\n` +
+          `Coordinate a time to meet this week. Your chat will be auto-logged if you use a Discord voice channel together, ` +
+          `or you can run \`/coffee complete\` when you're done.\n\n` +
+          `Have a great conversation!`
+        );
+        dmsSent++;
+      } catch (dmError) {
+        dmsFailed++;
+        console.log(`Could not DM user ${userId} in guild ${guildId} about pairing`);
+      }
+    }
+  }
+  
+  console.log(`[${guildId}] Sent ${dmsSent} pairing DMs (${dmsFailed} failed)`);
+}
+
+export async function sendReminderDMs(discordClient, guildId, incompletePairings) {
+  const discordGuild = await discordClient.guilds.fetch(guildId);
+  let dmsSent = 0;
+  
+  for (const pairing of incompletePairings) {
+    const allUsersInPairing = [pairing.user_a, pairing.user_b];
+    if (pairing.user_c) allUsersInPairing.push(pairing.user_c);
+    
+    for (const userId of allUsersInPairing) {
+      const partners = allUsersInPairing
+        .filter(id => id !== userId)
+        .map(id => `<@${id}>`)
+        .join(' and ');
+      
+      try {
+        const member = await discordGuild.members.fetch(userId);
+        await member.send(
+          `☕ **Friendly reminder!** You haven't had your coffee chat with ${partners} yet this week.\n\n` +
+          `Try to connect before the week ends! Hop into **${pairing.assigned_vc}** or coordinate a time that works.\n\n` +
+          `Once you've met, it'll be auto-logged via voice chat or you can run \`/coffee complete\`.`
+        );
+        dmsSent++;
+      } catch (dmError) {
+        console.log(`Could not send reminder DM to user ${userId} in guild ${guildId}`);
+      }
+    }
+  }
+  
+  console.log(`[${guildId}] Sent ${dmsSent} reminder DMs for ${incompletePairings.length} incomplete pairings`);
+}
+
+export async function postNotEnoughSignups(discordClient, guildId) {
+  const guildSettings = await getGuildSettings(guildId);
+  const pairingsChannel = await discordClient.channels.fetch(guildSettings.pairings_channel_id).catch(() => null);
+  
+  if (!pairingsChannel) {
+    console.warn(`[${guildId}] Pairings channel ${guildSettings.pairings_channel_id} not found or inaccessible. Skipping.`);
+    return;
+  }
   
   const notEnoughSignupsEmbed = new EmbedBuilder()
     .setColor(ERROR_RED_COLOR)
     .setTitle('☕ Coffee Chats This Week')
     .setDescription(
       'Not enough signups this week (need at least 2 people).\n\n' +
-      'Spread the word and let\'s get more sign-ups next Monday!'
+      'Spread the word and let\'s get more sign-ups next week!'
     )
     .setTimestamp();
   
   await pairingsChannel.send({ embeds: [notEnoughSignupsEmbed] });
-  console.log('Posted not-enough-signups message');
+  console.log(`Posted not-enough-signups message for guild ${guildId}`);
 }
 

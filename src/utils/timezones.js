@@ -47,3 +47,18 @@ export function formatDate(dateToFormat) {
   });
 }
 
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+function formatHour(hour24) {
+  const hour12 = hour24 > 12 ? hour24 - 12 : hour24;
+  const amPm = hour24 >= 12 ? 'PM' : 'AM';
+  return `${hour12}:00 ${amPm}`;
+}
+
+export function getSignupWindowDescription() {
+  const dayName = DAY_NAMES[SIGNUP_WINDOW.dayOfWeek];
+  const startTime = formatHour(SIGNUP_WINDOW.startHour);
+  const endTime = formatHour(SIGNUP_WINDOW.endHour);
+  return `${dayName} from ${startTime} to ${endTime} CT`;
+}
+

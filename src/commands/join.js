@@ -1,13 +1,15 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { TIMEZONE_REGIONS } from '../config.js';
-import { isSignupWindowOpen, formatDate } from '../utils/timezones.js';
+import { isSignupWindowOpen, formatDate, getSignupWindowDescription } from '../utils/timezones.js';
 import { 
   upsertProfile, 
   isPenalized, 
   getProfile, 
   addSignup, 
-  isSignedUp 
+  isSignedUp,
+  getSignupCount
 } from '../services/database.js';
+import { isGuildConfigured } from '../services/guildSettings.js';
 
 export const data = new SlashCommandBuilder()
   .setName('coffee')
@@ -30,45 +32,61 @@ export const data = new SlashCommandBuilder()
   );
 
 export async function execute(commandInteraction) {
+  const guildId = commandInteraction.guild.id;
   const selectedTimezoneRegion = commandInteraction.options.getString('timezone');
   const userId = commandInteraction.user.id;
+  const username = commandInteraction.user.username;
   
   try {
-    if (!isSignupWindowOpen()) {
+    const guildIsConfigured = await isGuildConfigured(guildId);
+    if (!guildIsConfigured) {
       return await commandInteraction.reply({
-        content: '❌ Signups are currently closed. They open every Monday from 8:00 AM to 12:00 PM CT.'
+        content: '❌ Coffee Chat Barista hasn\'t been set up yet. Ask an admin to run `/coffee setup`.',
+        ephemeral: true
       });
     }
     
-    const userIsCurrentlyPenalized = await isPenalized(userId);
+    if (!isSignupWindowOpen()) {
+      return await commandInteraction.reply({
+        content: `❌ Signups are currently closed. They open every ${getSignupWindowDescription()}.`,
+        ephemeral: true
+      });
+    }
+    
+    const userIsCurrentlyPenalized = await isPenalized(guildId, userId);
     if (userIsCurrentlyPenalized) {
-      const userProfile = await getProfile(userId);
+      const userProfile = await getProfile(guildId, userId);
       const penaltyExpiryDate = new Date(userProfile.penalty_expires_at);
       
       return await commandInteraction.reply({
-        content: `❌ <@${userId}> is currently penalized for a no-show and cannot sign up.\n\nPenalty expires on **${formatDate(penaltyExpiryDate)}**.`
+        content: `❌ You are currently penalized for a no-show and cannot sign up.\n\nPenalty expires on **${formatDate(penaltyExpiryDate)}**.`,
+        ephemeral: true
       });
     }
     
-    const userAlreadySignedUp = await isSignedUp(userId);
+    const userAlreadySignedUp = await isSignedUp(guildId, userId);
     if (userAlreadySignedUp) {
       return await commandInteraction.reply({
-        content: `❌ <@${userId}> is already signed up for this week's coffee chat!`
+        content: '❌ You\'re already signed up for this week\'s coffee chat!',
+        ephemeral: true
       });
     }
     
-    await upsertProfile(userId, selectedTimezoneRegion);
-    await addSignup(userId);
+    await upsertProfile(guildId, userId, username, selectedTimezoneRegion);
+    await addSignup(guildId, userId);
+    
+    const currentSignupCount = await getSignupCount(guildId);
     
     await commandInteraction.reply({
-      content: `☕ <@${userId}> signed up for this week's coffee chat! (${selectedTimezoneRegion} timezone)`
+      content: `☕ You're signed up for this week's coffee chat! (${selectedTimezoneRegion} timezone)\n\nYou're signup **#${currentSignupCount}** this week.`,
+      ephemeral: true
     });
     
   } catch (joinCommandError) {
     console.error('Error in /coffee join:', joinCommandError);
     await commandInteraction.reply({
-      content: '❌ An error occurred while signing you up. Please try again later.'
+      content: '❌ An error occurred while signing you up. Please try again later.',
+      ephemeral: true
     });
   }
 }
-
