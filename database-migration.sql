@@ -73,6 +73,7 @@ CREATE INDEX IF NOT EXISTS idx_guild_settings_configured ON guild_settings(annou
 -- 8. Add completion tracking columns to current_week_pairings
 ALTER TABLE current_week_pairings ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ DEFAULT NULL;
 ALTER TABLE current_week_pairings ADD COLUMN IF NOT EXISTS completion_method TEXT DEFAULT NULL;
+ALTER TABLE current_week_pairings ADD COLUMN IF NOT EXISTS assigned_vc_channel_id TEXT DEFAULT NULL;
 
 -- 9. Create pending_reports table for auditable moderation workflow
 CREATE TABLE IF NOT EXISTS pending_reports (
@@ -90,6 +91,7 @@ CREATE TABLE IF NOT EXISTS pending_reports (
 
 -- 10. Indexes for report and completion queries
 CREATE INDEX IF NOT EXISTS idx_pairings_guild_completion ON current_week_pairings(guild_id, completed_at);
+CREATE INDEX IF NOT EXISTS idx_pairings_guild_assigned_vc_id ON current_week_pairings(guild_id, assigned_vc_channel_id);
 CREATE INDEX IF NOT EXISTS idx_pending_reports_guild_status ON pending_reports(guild_id, status);
 CREATE INDEX IF NOT EXISTS idx_pending_reports_reported ON pending_reports(guild_id, reported_user_id, status);
 

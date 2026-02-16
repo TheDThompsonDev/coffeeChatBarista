@@ -14,17 +14,43 @@ function getPairingParticipantIds(pairing) {
 }
 
 function getRequiredParticipantCount(pairing) {
-  return pairing.user_c ? 2 : 2;
+  return getPairingParticipantIds(pairing).length;
 }
 
-function getAssignedVoiceChannel(guild, assignedChannelName) {
-  return guild.channels.cache.find(
-    channel => channel.isVoiceBased() && channel.name === assignedChannelName
+function getAssignedVoiceChannel(guild, pairing) {
+  if (pairing.assigned_vc_channel_id) {
+    const assignedById = guild.channels.cache.get(pairing.assigned_vc_channel_id);
+    if (assignedById?.isVoiceBased?.()) {
+      return assignedById;
+    }
+    console.warn(
+      `[${guild.id}] Assigned VC ID ${pairing.assigned_vc_channel_id} is missing or not voice-based for pairing ${pairing.id}. Falling back to name lookup.`
+    );
+  }
+
+  if (!pairing.assigned_vc) {
+    return null;
+  }
+
+  const matchingByName = guild.channels.cache.filter(
+    channel => channel?.isVoiceBased?.() && channel.name === pairing.assigned_vc
   );
+
+  if (matchingByName.size === 1) {
+    return matchingByName.first();
+  }
+
+  if (matchingByName.size > 1) {
+    console.warn(
+      `[${guild.id}] Multiple voice channels named "${pairing.assigned_vc}" found for pairing ${pairing.id}.`
+    );
+  }
+
+  return null;
 }
 
 function getAssignedChannelPresence(guild, pairing) {
-  const assignedVoiceChannel = getAssignedVoiceChannel(guild, pairing.assigned_vc);
+  const assignedVoiceChannel = getAssignedVoiceChannel(guild, pairing);
   if (!assignedVoiceChannel) {
     return {
       assignedVoiceChannel: null,

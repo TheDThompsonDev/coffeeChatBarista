@@ -37,24 +37,37 @@ export const data = new SlashCommandBuilder()
       )
   );
 
-export async function execute(commandInteraction) {
-  const memberPermissions = commandInteraction.member.permissions;
-  if (!memberPermissions.has(PermissionFlagsBits.Administrator)) {
-    return await commandInteraction.reply({
-      content: '❌ Only server administrators can run the setup command.',
-      ephemeral: true
-    });
+function hasAdminPermission(commandInteraction) {
+  if (commandInteraction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+    return true;
   }
-  
-  const guildId = commandInteraction.guild.id;
-  const guildName = commandInteraction.guild.name;
-  const announcementsChannel = commandInteraction.options.getChannel('announcements');
-  const pairingsChannel = commandInteraction.options.getChannel('pairings');
-  const moderatorRole = commandInteraction.options.getRole('moderator');
-  const pingRole = commandInteraction.options.getRole('ping');
-  const signupWindowDescription = getSignupWindowDescription();
-  
+
+  const rawPermissions = commandInteraction.member?.permissions;
+  if (typeof rawPermissions === 'string') {
+    const permissionsAsBigInt = BigInt(rawPermissions);
+    return (permissionsAsBigInt & PermissionFlagsBits.Administrator) === PermissionFlagsBits.Administrator;
+  }
+
+  return false;
+}
+
+export async function execute(commandInteraction) {
   try {
+    if (!hasAdminPermission(commandInteraction)) {
+      return await commandInteraction.reply({
+        content: '❌ Only server administrators can run the setup command.',
+        ephemeral: true
+      });
+    }
+
+    const guildId = commandInteraction.guild.id;
+    const guildName = commandInteraction.guild.name;
+    const announcementsChannel = commandInteraction.options.getChannel('announcements');
+    const pairingsChannel = commandInteraction.options.getChannel('pairings');
+    const moderatorRole = commandInteraction.options.getRole('moderator');
+    const pingRole = commandInteraction.options.getRole('ping');
+    const signupWindowDescription = getSignupWindowDescription();
+
     await upsertGuildSettings(guildId, {
       guild_name: guildName,
       announcements_channel_id: announcementsChannel.id,
@@ -79,10 +92,16 @@ export async function execute(commandInteraction) {
     
   } catch (setupError) {
     console.error('Error in /coffee setup:', setupError);
-    await commandInteraction.reply({
+    const errorPayload = {
       content: '❌ An error occurred during setup. Please try again.',
       ephemeral: true
-    });
+    };
+
+    if (commandInteraction.replied || commandInteraction.deferred) {
+      await commandInteraction.followUp(errorPayload);
+    } else {
+      await commandInteraction.reply(errorPayload);
+    }
   }
 }
 

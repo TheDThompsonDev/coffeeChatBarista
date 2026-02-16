@@ -173,7 +173,8 @@ export async function savePairings(guildId, pairingsToSave) {
     user_a: pairing.user_a,
     user_b: pairing.user_b,
     user_c: pairing.user_c || null,
-    assigned_vc: pairing.assigned_vc
+    assigned_vc: pairing.assigned_vc,
+    assigned_vc_channel_id: pairing.assigned_vc_channel_id || null
   }));
   
   const { data, error } = await supabaseClient
@@ -228,7 +229,14 @@ export async function clearAllPairings(guildId) {
   if (error) throw error;
 }
 
-export async function createManualPairing(guildId, userA, userB, userC = null, vcNumber = 1) {
+export async function createManualPairing(
+  guildId,
+  userA,
+  userB,
+  userC = null,
+  vcNumber = 1,
+  vcChannelId = null
+) {
   const { data, error } = await supabaseClient
     .from('current_week_pairings')
     .insert({
@@ -236,7 +244,8 @@ export async function createManualPairing(guildId, userA, userB, userC = null, v
       user_a: userA,
       user_b: userB,
       user_c: userC,
-      assigned_vc: `Coffee Chat VC ${vcNumber}`
+      assigned_vc: `Coffee Chat VC ${vcNumber}`,
+      assigned_vc_channel_id: vcChannelId
     })
     .select()
     .single();
@@ -354,6 +363,28 @@ export async function getSignupCount(guildId) {
     .select('*', { count: 'exact', head: true })
     .eq('guild_id', guildId);
   
+  if (error) throw error;
+  return count || 0;
+}
+
+export async function getCompletedPairingsCount(guildId) {
+  const { count, error } = await supabaseClient
+    .from('current_week_pairings')
+    .select('id', { count: 'exact', head: true })
+    .eq('guild_id', guildId)
+    .not('completed_at', 'is', null);
+
+  if (error) throw error;
+  return count || 0;
+}
+
+export async function getPendingReportsCount(guildId) {
+  const { count, error } = await supabaseClient
+    .from('pending_reports')
+    .select('id', { count: 'exact', head: true })
+    .eq('guild_id', guildId)
+    .eq('status', REPORT_STATUS_PENDING);
+
   if (error) throw error;
   return count || 0;
 }

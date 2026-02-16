@@ -25,7 +25,7 @@ export async function execute(commandInteraction) {
       '2. Matches are created after signups close\n' +
       '3. You\'ll receive a DM with your partner and assigned voice channel\n' +
       '4. Meet your partner anytime during the week\n' +
-      '5. Your chat is auto-logged when you use a Discord VC together, or you can run `/coffee complete`\n' +
+      '5. Your chat is auto-logged when you use your assigned VC together, or you can run `/coffee complete`\n' +
       '6. If your partner doesn\'t show, use `/coffee report @user` (moderators review reports before penalties)\n\n' +
       '**Commands:**\n' +
       '`/coffee join <timezone>` — Sign up for this week\n' +

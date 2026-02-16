@@ -63,10 +63,13 @@ export async function execute(commandInteraction) {
         .filter(pairingUserId => pairingUserId !== userId)
         .map(pairingUserId => `<@${pairingUserId}>`)
         .join(', ');
+      const assignedVoiceChannelDisplay = userCurrentPairing.assigned_vc_channel_id
+        ? `<#${userCurrentPairing.assigned_vc_channel_id}>`
+        : userCurrentPairing.assigned_vc;
       
       statusDescription += `**Current Match:**\n`;
       statusDescription += `👥 ${partnerMentions}\n`;
-      statusDescription += `🎤 ${userCurrentPairing.assigned_vc}\n`;
+      statusDescription += `🎤 ${assignedVoiceChannelDisplay}\n`;
       
       if (userCurrentPairing.user_c) {
         statusDescription += `ℹ️ This is a trio (3 people)\n`;
@@ -79,7 +82,7 @@ export async function execute(commandInteraction) {
         statusDescription += `✅ **Coffee chat complete** (${method})\n`;
       } else {
         statusDescription += `⏳ **Coffee chat not yet logged**\n`;
-        statusDescription += `Use a voice channel together or run \`/coffee complete\` when done.\n`;
+        statusDescription += `Use your assigned VC together or run \`/coffee complete\` when done.\n`;
       }
     } else {
       statusDescription += '**Current Match:** None\n';

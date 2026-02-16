@@ -42,7 +42,7 @@ A Discord bot for facilitating weekly random 1-on-1 coffee chats in developer co
 | `/coffee admin say <message>` | Post a custom message from the bot |
 | `/coffee admin reset` | Clear all signups |
 | `/coffee admin list` | View current week's signups |
-| `/coffee admin match` | Manually trigger the matching process |
+| `/coffee admin match [force:true]` | Manually trigger matching (force required if completions/reports already exist) |
 | `/coffee admin punish @user` | Apply a no-show penalty after reviewing a report |
 | `/coffee admin dismiss-report <report_id>` | Dismiss a pending no-show report |
 | `/coffee admin unpunish @user` | Remove a user's penalty |

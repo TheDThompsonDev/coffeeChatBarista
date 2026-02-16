@@ -6,6 +6,8 @@ import {
   clearAllPairings,
   clearCurrentWeekHistory,
   expirePendingReports,
+  getCompletedPairingsCount,
+  getPendingReportsCount,
   removePenalty, 
   applyPenalty,
   getPendingReportById,
@@ -61,6 +63,12 @@ export const data = new SlashCommandBuilder()
         subcommand
           .setName('match')
           .setDescription('Manually trigger the matching process')
+          .addBooleanOption(option =>
+            option
+              .setName('force')
+              .setDescription('Force rematch even if completions/reports already exist this week')
+              .setRequired(false)
+          )
       )
       .addSubcommand(subcommand =>
         subcommand
@@ -298,6 +306,21 @@ async function handleListSignups(commandInteraction) {
 
 async function handleManualMatch(commandInteraction) {
   const guildId = commandInteraction.guild.id;
+  const forceRematch = commandInteraction.options.getBoolean('force') || false;
+  const completedPairingsCount = await getCompletedPairingsCount(guildId);
+  const pendingReportsCount = await getPendingReportsCount(guildId);
+
+  if ((completedPairingsCount > 0 || pendingReportsCount > 0) && !forceRematch) {
+    return await commandInteraction.reply({
+      content:
+        `⚠️ Rematch blocked to protect existing weekly records.\n\n` +
+        `Completed chats this week: **${completedPairingsCount}**\n` +
+        `Pending reports this week: **${pendingReportsCount}**\n\n` +
+        `If you really need to rebuild pairings, run \`/coffee admin match force:true\`. ` +
+        `This will clear current-week completion history and pending reports before rematching.`,
+      ephemeral: true
+    });
+  }
   
   await commandInteraction.deferReply({ ephemeral: true });
   
@@ -308,8 +331,9 @@ async function handleManualMatch(commandInteraction) {
   
   await runMatchingForGuild(commandInteraction.client, guildId);
   
+  const forcedLabel = forceRematch ? ' (forced rebuild)' : '';
   await commandInteraction.editReply({
-    content: '✅ **Matching complete!** Pairings have been created and posted. DMs have been sent to participants.'
+    content: `✅ **Matching complete${forcedLabel}!** Pairings have been created and posted. DMs have been sent to participants.`
   });
   
   console.log(`Admin ${commandInteraction.user.id} manually triggered matching for guild ${guildId}`);
@@ -424,6 +448,28 @@ async function handleUnpunishUser(commandInteraction) {
   console.log(`Admin ${commandInteraction.user.id} removed penalty from ${selectedUser.id} in guild ${guildId}`);
 }
 
+function resolveAssignedVoiceChannelId(discordGuild, assignedVoiceChannelName) {
+  const matchingVoiceChannels = discordGuild.channels.cache.filter(
+    channel => channel?.isVoiceBased?.() && channel.name === assignedVoiceChannelName
+  );
+
+  if (matchingVoiceChannels.size === 1) {
+    return matchingVoiceChannels.first().id;
+  }
+
+  if (matchingVoiceChannels.size > 1) {
+    console.warn(
+      `[${discordGuild.id}] Multiple voice channels named "${assignedVoiceChannelName}" found. Manual pairing saved without VC channel ID.`
+    );
+    return null;
+  }
+
+  console.warn(
+    `[${discordGuild.id}] Voice channel "${assignedVoiceChannelName}" not found. Manual pairing saved without VC channel ID.`
+  );
+  return null;
+}
+
 async function handleForceManualPairing(commandInteraction) {
   const guildId = commandInteraction.guild.id;
   const firstUser = commandInteraction.options.getUser('user1');
@@ -440,17 +486,31 @@ async function handleForceManualPairing(commandInteraction) {
       ephemeral: true
     });
   }
-  
-  await createManualPairing(guildId, firstUser.id, secondUser.id, optionalThirdUser?.id || null, assignedVoiceChannelNumber);
+
+  const assignedVoiceChannelName = `Coffee Chat VC ${assignedVoiceChannelNumber}`;
+  await commandInteraction.guild.channels.fetch();
+  const assignedVoiceChannelId = resolveAssignedVoiceChannelId(commandInteraction.guild, assignedVoiceChannelName);
+
+  await createManualPairing(
+    guildId,
+    firstUser.id,
+    secondUser.id,
+    optionalThirdUser?.id || null,
+    assignedVoiceChannelNumber,
+    assignedVoiceChannelId
+  );
   
   const allUsersInPairing = [firstUser, secondUser];
   if (optionalThirdUser) allUsersInPairing.push(optionalThirdUser);
   
   const userMentions = allUsersInPairing.map(user => `<@${user.id}>`).join(' + ');
   const trioLabel = optionalThirdUser ? ' (Trio)' : '';
+  const voiceChannelDisplay = assignedVoiceChannelId
+    ? `<#${assignedVoiceChannelId}>`
+    : assignedVoiceChannelName;
   
   await commandInteraction.reply({
-    content: `☕ **Manual pairing created** by <@${commandInteraction.user.id}>${trioLabel}\n\n👥 ${userMentions}\n🎤 Coffee Chat VC ${assignedVoiceChannelNumber}`,
+    content: `☕ **Manual pairing created** by <@${commandInteraction.user.id}>${trioLabel}\n\n👥 ${userMentions}\n🎤 ${voiceChannelDisplay}`,
     ephemeral: true
   });
   

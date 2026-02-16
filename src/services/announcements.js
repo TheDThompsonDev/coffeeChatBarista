@@ -98,8 +98,11 @@ export async function postPairings(discordClient, guildId, weeklyPairings) {
       const userMentions = allUsersInPairing.map(userId => `<@${userId}>`).join(' + ');
       const trioLabel = pairing.user_c ? ' (Trio)' : '';
       const coordinationWarning = pairing.needsCoordination ? ' ⚠️' : '';
+      const assignedVoiceChannelDisplay = pairing.assigned_vc_channel_id
+        ? `<#${pairing.assigned_vc_channel_id}>`
+        : `**${pairing.assigned_vc}**`;
       
-      batchMessageLines.push(`☕ ${userMentions}${trioLabel} → **${pairing.assigned_vc}**${coordinationWarning}`);
+      batchMessageLines.push(`☕ ${userMentions}${trioLabel} → ${assignedVoiceChannelDisplay}${coordinationWarning}`);
     }
     
     await pairingsChannel.send(batchMessageLines.join('\n'));
@@ -123,6 +126,9 @@ export async function sendPairingDMs(discordClient, guildId, weeklyPairings) {
         .filter(id => id !== userId)
         .map(id => `<@${id}>`)
         .join(' and ');
+      const assignedVoiceChannelDisplay = pairing.assigned_vc_channel_id
+        ? `<#${pairing.assigned_vc_channel_id}>`
+        : `**${pairing.assigned_vc}**`;
       
       const trioNote = pairing.user_c ? ' (trio)' : '';
       
@@ -131,8 +137,8 @@ export async function sendPairingDMs(discordClient, guildId, weeklyPairings) {
         await member.send(
           `☕ **You've been paired for this week's coffee chat!**${trioNote}\n\n` +
           `👥 Your partner: ${partners}\n` +
-          `🎤 Assigned VC: **${pairing.assigned_vc}**\n\n` +
-          `Coordinate a time to meet this week. Your chat will be auto-logged if you use a Discord voice channel together, ` +
+          `🎤 Assigned VC: ${assignedVoiceChannelDisplay}\n\n` +
+          `Coordinate a time to meet this week. Your chat will be auto-logged if you use your assigned VC together, ` +
           `or you can run \`/coffee complete\` when you're done.\n\n` +
           `Have a great conversation!`
         );
@@ -160,13 +166,16 @@ export async function sendReminderDMs(discordClient, guildId, incompletePairings
         .filter(id => id !== userId)
         .map(id => `<@${id}>`)
         .join(' and ');
+      const assignedVoiceChannelDisplay = pairing.assigned_vc_channel_id
+        ? `<#${pairing.assigned_vc_channel_id}>`
+        : `**${pairing.assigned_vc}**`;
       
       try {
         const member = await discordGuild.members.fetch(userId);
         await member.send(
           `☕ **Friendly reminder!** You haven't had your coffee chat with ${partners} yet this week.\n\n` +
-          `Try to connect before the week ends! Hop into **${pairing.assigned_vc}** or coordinate a time that works.\n\n` +
-          `Once you've met, it'll be auto-logged via voice chat or you can run \`/coffee complete\`.`
+          `Try to connect before the week ends! Hop into ${assignedVoiceChannelDisplay} or coordinate a time that works.\n\n` +
+          `Once you've met in your assigned VC, it'll be auto-logged, or you can run \`/coffee complete\`.`
         );
         dmsSent++;
       } catch (dmError) {

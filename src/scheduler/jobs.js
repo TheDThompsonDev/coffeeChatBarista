@@ -116,6 +116,9 @@ export async function runMatchingForGuild(discordClient, guildId) {
   
   const createdPairings = await runMatching(guildId, eligibleSignups, discordClient);
   console.log(`[${guildId}] Created ${createdPairings.length} pairings`);
+
+  await discordGuild.channels.fetch();
+  attachVoiceChannelIds(createdPairings, discordGuild);
   
   await savePairings(guildId, createdPairings);
   
@@ -124,6 +127,40 @@ export async function runMatchingForGuild(discordClient, guildId) {
   await sendPairingDMs(discordClient, guildId, createdPairings);
   
   console.log(`[${guildId}] Matching process complete`);
+}
+
+function attachVoiceChannelIds(pairings, discordGuild) {
+  const voiceChannelIdByName = new Map();
+  const duplicateVoiceChannelNames = new Set();
+
+  for (const channel of discordGuild.channels.cache.values()) {
+    if (!channel?.isVoiceBased?.()) continue;
+    if (voiceChannelIdByName.has(channel.name)) {
+      duplicateVoiceChannelNames.add(channel.name);
+      voiceChannelIdByName.set(channel.name, null);
+      continue;
+    }
+    voiceChannelIdByName.set(channel.name, channel.id);
+  }
+
+  for (const pairing of pairings) {
+    const assignedChannelName = pairing.assigned_vc;
+    const assignedChannelId = voiceChannelIdByName.get(assignedChannelName) || null;
+    pairing.assigned_vc_channel_id = assignedChannelId;
+
+    if (duplicateVoiceChannelNames.has(assignedChannelName)) {
+      console.warn(
+        `[${discordGuild.id}] Duplicate VC name "${assignedChannelName}" detected. Auto-complete disabled for this pairing.`
+      );
+      continue;
+    }
+
+    if (!assignedChannelId) {
+      console.warn(
+        `[${discordGuild.id}] Could not resolve VC "${assignedChannelName}". Users can still complete manually with /coffee complete.`
+      );
+    }
+  }
 }
 
 async function runReminderForAllGuilds(discordClient) {
